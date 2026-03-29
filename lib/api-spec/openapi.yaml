@@ -13,6 +13,8 @@ tags:
     description: Favourite YouTube channels
   - name: videos
     description: YouTube videos from favourite channels
+  - name: ai
+    description: AI-powered features
 paths:
   /healthz:
     get:
@@ -144,6 +146,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /videos/summary:
+    post:
+      operationId: getVideoSummary
+      tags: [ai]
+      summary: Generate AI summary for a video
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VideoSummaryRequest"
+      responses:
+        "200":
+          description: AI-generated summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoSummaryResponse"
+        "500":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -235,6 +261,29 @@ components:
         - youtubeChannelId
         - name
         - description
+    VideoSummaryRequest:
+      type: object
+      properties:
+        videoId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        channelName:
+          type: string
+      required:
+        - videoId
+        - title
+        - description
+        - channelName
+    VideoSummaryResponse:
+      type: object
+      properties:
+        summary:
+          type: string
+      required:
+        - summary
     ErrorResponse:
       type: object
       properties:

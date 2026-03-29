@@ -43,6 +43,17 @@ export interface ChannelSearchResult {
   subscriberCount?: string | null;
 }
 
+export interface VideoSummaryRequest {
+  videoId: string;
+  title: string;
+  description: string;
+  channelName: string;
+}
+
+export interface VideoSummaryResponse {
+  summary: string;
+}
+
 export interface ErrorResponse {
   error: string;
 }

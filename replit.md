@@ -55,10 +55,12 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 React + Vite web app (at `/`) for aggregating recent YouTube videos from favourite channels.
 
 - **Frontend**: Dark YouTube-inspired theme with channel sidebar and video grid
-- **Backend**: Express API routes at `/api/channels` and `/api/videos`
+- **Backend**: Express API routes at `/api/channels`, `/api/videos`, `/api/videos/summary`
 - **Database**: PostgreSQL table `channels` (via Drizzle ORM)
 - **YouTube API**: Uses YouTube Data API v3 — requires `YOUTUBE_API_KEY` secret
+- **AI Summaries**: Replit OpenAI proxy (`gpt-4o-mini`) — no user API key required; env vars auto-provisioned
 - Fetches videos from the past 3 months, sorted by date, with view counts and duration
+- Clicking a video card opens an in-app player modal (YouTube iframe embed + AI summary generation)
 
 ## Packages
 

@@ -14,3 +14,5 @@ export * from "./healthStatus";
 export * from "./listVideosParams";
 export * from "./searchChannelsParams";
 export * from "./video";
+export * from "./videoSummaryRequest";
+export * from "./videoSummaryResponse";

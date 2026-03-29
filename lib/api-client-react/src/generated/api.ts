@@ -25,6 +25,8 @@ import type {
   ListVideosParams,
   SearchChannelsParams,
   Video,
+  VideoSummaryRequest,
+  VideoSummaryResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -544,3 +546,89 @@ export function useListVideos<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Generate AI summary for a video
+ */
+export const getGetVideoSummaryUrl = () => {
+  return `/api/videos/summary`;
+};
+
+export const getVideoSummary = async (
+  videoSummaryRequest: VideoSummaryRequest,
+  options?: RequestInit,
+): Promise<VideoSummaryResponse> => {
+  return customFetch<VideoSummaryResponse>(getGetVideoSummaryUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(videoSummaryRequest),
+  });
+};
+
+export const getGetVideoSummaryMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof getVideoSummary>>,
+    TError,
+    { data: BodyType<VideoSummaryRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof getVideoSummary>>,
+  TError,
+  { data: BodyType<VideoSummaryRequest> },
+  TContext
+> => {
+  const mutationKey = ["getVideoSummary"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof getVideoSummary>>,
+    { data: BodyType<VideoSummaryRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return getVideoSummary(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GetVideoSummaryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof getVideoSummary>>
+>;
+export type GetVideoSummaryMutationBody = BodyType<VideoSummaryRequest>;
+export type GetVideoSummaryMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Generate AI summary for a video
+ */
+export const useGetVideoSummary = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof getVideoSummary>>,
+    TError,
+    { data: BodyType<VideoSummaryRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof getVideoSummary>>,
+  TError,
+  { data: BodyType<VideoSummaryRequest> },
+  TContext
+> => {
+  return useMutation(getGetVideoSummaryMutationOptions(options));
+};

@@ -8,10 +8,13 @@ import { VideoCard } from "../components/video-card";
 import { VideoSkeleton } from "../components/video-skeleton";
 import { ChannelSidebar } from "../components/channel-sidebar";
 import { AddChannelModal } from "../components/add-channel-modal";
+import { VideoPlayerModal } from "../components/video-player-modal";
+import type { Video } from "@workspace/api-client-react";
 
 export default function Home() {
   const [selectedChannelId, setSelectedChannelId] = useState<number | undefined>();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [activeVideo, setActiveVideo] = useState<Video | null>(null);
   
   const { data: channels } = useChannels();
   const { data: videos, isLoading: isVideosLoading, isError, error, refetch } = useVideos(selectedChannelId);
@@ -170,7 +173,7 @@ export default function Home() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.5), ease: "easeOut" }}
                 >
-                  <VideoCard video={video} />
+                  <VideoCard video={video} onClick={setActiveVideo} />
                 </motion.div>
               ))}
             </div>
@@ -178,9 +181,14 @@ export default function Home() {
         </main>
       </div>
 
-      <AddChannelModal 
-        isOpen={isAddModalOpen} 
-        onClose={() => setIsAddModalOpen(false)} 
+      <AddChannelModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+      />
+
+      <VideoPlayerModal
+        video={activeVideo}
+        onClose={() => setActiveVideo(null)}
       />
     </div>
   );

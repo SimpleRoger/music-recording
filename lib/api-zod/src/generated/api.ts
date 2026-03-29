@@ -82,3 +82,17 @@ export const ListVideosResponseItem = zod.object({
   duration: zod.string().nullish(),
 });
 export const ListVideosResponse = zod.array(ListVideosResponseItem);
+
+/**
+ * @summary Generate AI summary for a video
+ */
+export const GetVideoSummaryBody = zod.object({
+  videoId: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  channelName: zod.string(),
+});
+
+export const GetVideoSummaryResponse = zod.object({
+  summary: zod.string(),
+});
