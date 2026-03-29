@@ -1,9 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ExternalLink, Sparkles, Loader2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { X, ExternalLink, Sparkles, Loader2, AlertCircle, ChevronDown, ChevronUp, Users, CheckCircle2, Star } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { Video } from "@workspace/api-client-react";
 import { formatViews, formatDuration } from "../lib/utils";
+
+interface StructuredSummary {
+  overview: string;
+  keyPoints: string[];
+  audience: string;
+  verdict: string;
+}
 
 interface VideoPlayerModalProps {
   video: Video | null;
@@ -11,7 +18,7 @@ interface VideoPlayerModalProps {
 }
 
 export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
-  const [summary, setSummary] = useState<string | null>(null);
+  const [structured, setStructured] = useState<StructuredSummary | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [descExpanded, setDescExpanded] = useState(false);
@@ -20,7 +27,7 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
 
   // Reset when video changes
   useEffect(() => {
-    setSummary(null);
+    setStructured(null);
     setSummaryError(null);
     setDescExpanded(false);
   }, [video?.videoId]);
@@ -64,7 +71,11 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
         throw new Error(data.error || "Failed to generate summary");
       }
       const data = await resp.json();
-      setSummary(data.summary);
+      if (data.structured) {
+        setStructured(data.structured);
+      } else {
+        setStructured({ overview: data.summary, keyPoints: [], audience: "", verdict: "" });
+      }
     } catch (err: any) {
       setSummaryError(err.message || "Something went wrong");
     } finally {
@@ -199,7 +210,7 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
               </div>
 
               {/* Not yet generated */}
-              {!summary && !isSummaryLoading && !summaryError && (
+              {!structured && !isSummaryLoading && !summaryError && (
                 <div className="flex flex-col items-center justify-center flex-1 text-center py-8">
                   <div className="w-14 h-14 rounded-full bg-primary/5 border border-primary/10 flex items-center justify-center mb-4">
                     <Sparkles className="w-6 h-6 text-primary/40" />
@@ -239,16 +250,63 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
                 </div>
               )}
 
-              {/* Summary text */}
-              {summary && !isSummaryLoading && (
+              {/* Structured summary */}
+              {structured && !isSummaryLoading && (
                 <motion.div
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="flex flex-col gap-4 flex-1"
                 >
-                  <div className="bg-background rounded-xl p-4 border border-border">
-                    <p className="text-text-main text-sm leading-relaxed">{summary}</p>
-                  </div>
+                  {/* Overview */}
+                  {structured.overview && (
+                    <div className="bg-background rounded-xl p-4 border border-border">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-text-muted mb-2">Overview</p>
+                      <p className="text-text-main text-sm leading-relaxed">{structured.overview}</p>
+                    </div>
+                  )}
+
+                  {/* Key Points */}
+                  {structured.keyPoints.length > 0 && (
+                    <div className="bg-background rounded-xl p-4 border border-border">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-text-muted mb-3 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3 h-3 text-primary" />
+                        What you'll learn
+                      </p>
+                      <ul className="flex flex-col gap-2">
+                        {structured.keyPoints.map((point, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-text-main">
+                            <span className="mt-1 w-4 h-4 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
+                              {i + 1}
+                            </span>
+                            <span className="leading-relaxed">{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Audience */}
+                  {structured.audience && (
+                    <div className="bg-background rounded-xl p-4 border border-border">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-text-muted mb-2 flex items-center gap-1.5">
+                        <Users className="w-3 h-3 text-primary" />
+                        Best for
+                      </p>
+                      <p className="text-text-main text-sm leading-relaxed">{structured.audience}</p>
+                    </div>
+                  )}
+
+                  {/* Verdict */}
+                  {structured.verdict && (
+                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-primary/70 mb-2 flex items-center gap-1.5">
+                        <Star className="w-3 h-3 text-primary" />
+                        Worth watching?
+                      </p>
+                      <p className="text-text-main text-sm leading-relaxed">{structured.verdict}</p>
+                    </div>
+                  )}
+
                   <button
                     onClick={generateSummary}
                     className="self-start flex items-center gap-1.5 text-xs text-text-muted hover:text-primary transition-colors"
