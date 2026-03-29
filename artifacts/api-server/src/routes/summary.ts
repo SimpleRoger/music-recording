@@ -13,51 +13,80 @@ router.post("/videos/summary", async (req, res): Promise<void> => {
 
   const { title, description, channelName } = parsed.data;
 
-  const prompt = `You are an expert content analyst helping viewers decide whether to watch a YouTube video.
+  const prompt = `You are an expert content analyst. Your job is to produce a comprehensive breakdown of a YouTube video so thorough that the reader gains full value from it without watching.
 
-Video title: "${title}"
-Channel: "${channelName}"
-Description:
-${description ? description.slice(0, 3000) : "(no description provided)"}
+VIDEO TITLE: "${title}"
+CHANNEL: "${channelName}"
+DESCRIPTION:
+${description ? description.slice(0, 6000) : "(no description provided)"}
 
-Write a detailed analysis using EXACTLY this JSON structure (no markdown, no code fences, raw JSON only):
+---
+
+Produce a detailed JSON analysis with EXACTLY this structure (raw JSON, no markdown, no code fences):
+
 {
-  "overview": "2–3 sentences covering the core topic and angle of the video.",
-  "keyPoints": ["Point 1", "Point 2", "Point 3", "Point 4"],
-  "audience": "1 sentence describing who will benefit most from this video.",
-  "verdict": "1–2 sentences on whether it's worth watching and why."
+  "tldr": "One punchy sentence that captures the entire video in plain language.",
+  "overview": "A rich 3–5 sentence paragraph covering the core subject, the approach taken, and the main argument or narrative arc of the video.",
+  "topicsCovered": [
+    {
+      "topic": "Concise topic title",
+      "detail": "2–4 sentences explaining exactly what was covered under this topic — specific facts, techniques, arguments, or demonstrations mentioned. Be as concrete and informative as possible."
+    }
+  ],
+  "keyTakeaways": [
+    "Concrete, specific takeaway — not generic. Include actual facts, numbers, techniques, or advice from the video."
+  ],
+  "notableDetails": [
+    "An interesting detail, quote, example, statistic, or tip that stands out from the video."
+  ],
+  "audience": "A detailed sentence describing exactly who will benefit most and what prior knowledge helps.",
+  "verdict": "2–3 sentences assessing the video's value: what it does well, any limitations, and a clear recommendation."
 }
 
 Rules:
-- keyPoints must have 3–5 items, each a distinct insight or thing covered in the video.
-- Be specific — avoid generic filler like "great content" or "very informative".
-- Base everything on the title and description; do not invent facts not implied by them.
-- Output raw JSON only, nothing else.`;
+- topicsCovered: 4–8 items. Each detail must be substantive — never say 'this topic is covered in detail'. Actually explain what was said.
+- keyTakeaways: 5–8 items. Must be specific and actionable/informational. No filler like 'the speaker gives tips'.
+- notableDetails: 3–5 items. Highlight the most interesting or surprising specifics.
+- Draw exclusively from the title and description. If the description has timestamps or section headers, use them to structure topicsCovered.
+- Output raw JSON only — nothing else.`;
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
-    max_completion_tokens: 700,
+    max_completion_tokens: 1800,
     messages: [{ role: "user", content: prompt }],
     response_format: { type: "json_object" },
   });
 
   const raw = completion.choices[0]?.message?.content?.trim() ?? "{}";
 
-  let parsed2: { overview?: string; keyPoints?: string[]; audience?: string; verdict?: string } = {};
+  type Parsed = {
+    tldr?: string;
+    overview?: string;
+    topicsCovered?: { topic: string; detail: string }[];
+    keyTakeaways?: string[];
+    notableDetails?: string[];
+    audience?: string;
+    verdict?: string;
+  };
+
+  let data: Parsed = {};
   try {
-    parsed2 = JSON.parse(raw);
+    data = JSON.parse(raw) as Parsed;
   } catch {
     res.json({ summary: raw });
     return;
   }
 
   res.json({
-    summary: parsed2.overview ?? "",
+    summary: data.overview ?? data.tldr ?? "",
     structured: {
-      overview: parsed2.overview ?? "",
-      keyPoints: Array.isArray(parsed2.keyPoints) ? parsed2.keyPoints : [],
-      audience: parsed2.audience ?? "",
-      verdict: parsed2.verdict ?? "",
+      tldr: data.tldr ?? "",
+      overview: data.overview ?? "",
+      topicsCovered: Array.isArray(data.topicsCovered) ? data.topicsCovered : [],
+      keyTakeaways: Array.isArray(data.keyTakeaways) ? data.keyTakeaways : [],
+      notableDetails: Array.isArray(data.notableDetails) ? data.notableDetails : [],
+      audience: data.audience ?? "",
+      verdict: data.verdict ?? "",
     },
   });
 });
