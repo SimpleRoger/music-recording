@@ -1,15 +1,18 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: YouTube Channel Feed API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: channels
+    description: Favourite YouTube channels
+  - name: videos
+    description: YouTube videos from favourite channels
 paths:
   /healthz:
     get:
@@ -24,6 +27,90 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /channels:
+    get:
+      operationId: listChannels
+      tags: [channels]
+      summary: List favourite channels
+      responses:
+        "200":
+          description: List of channels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Channel"
+    post:
+      operationId: addChannel
+      tags: [channels]
+      summary: Add a favourite channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddChannelRequest"
+      responses:
+        "201":
+          description: Channel added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Channel"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /channels/{id}:
+    delete:
+      operationId: removeChannel
+      tags: [channels]
+      summary: Remove a favourite channel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Channel removed
+        "404":
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /videos:
+    get:
+      operationId: listVideos
+      tags: [videos]
+      summary: List recent videos from favourite channels
+      parameters:
+        - name: channelId
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Filter by specific channel DB id
+      responses:
+        "200":
+          description: List of videos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Video"
+        "500":
+          description: API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +120,73 @@ components:
           type: string
       required:
         - status
-
+    Channel:
+      type: object
+      properties:
+        id:
+          type: integer
+        youtubeChannelId:
+          type: string
+        name:
+          type: string
+        thumbnailUrl:
+          type: string
+          nullable: true
+        addedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - youtubeChannelId
+        - name
+        - addedAt
+    AddChannelRequest:
+      type: object
+      properties:
+        youtubeChannelId:
+          type: string
+          description: YouTube channel ID (starts with UC...) or handle (@username)
+      required:
+        - youtubeChannelId
+    Video:
+      type: object
+      properties:
+        videoId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        thumbnailUrl:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+        viewCount:
+          type: string
+          nullable: true
+        channelId:
+          type: string
+        channelName:
+          type: string
+        channelThumbnailUrl:
+          type: string
+          nullable: true
+        duration:
+          type: string
+          nullable: true
+      required:
+        - videoId
+        - title
+        - description
+        - thumbnailUrl
+        - publishedAt
+        - channelId
+        - channelName
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error

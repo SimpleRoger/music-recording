@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface Channel {
+  id: number;
+  youtubeChannelId: string;
+  name: string;
+  thumbnailUrl?: string | null;
+  addedAt: Date;
 }
