@@ -4,118 +4,50 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router: IRouter = Router();
 
-// ── Transcript fetching ──────────────────────────────────────────────────────
-
-function decodeHtmlEntities(html: string): string {
-  return html
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
-}
-
-function parseTranscriptXml(xml: string): string {
-  const texts: string[] = [];
-
-  // Newer timedtext format: <p t="..." d="..."><s>word</s></p>
-  const pTagRe = /<p\s[^>]*>([\s\S]*?)<\/p>/g;
-  let m: RegExpExecArray | null;
-  while ((m = pTagRe.exec(xml)) !== null) {
-    const inner = m[1];
-    const sTagRe = /<s[^>]*>([^<]*)<\/s>/g;
-    let s: RegExpExecArray | null;
-    let word = "";
-    while ((s = sTagRe.exec(inner)) !== null) word += s[1];
-    if (!word) word = inner.replace(/<[^>]+>/g, "");
-    const decoded = decodeHtmlEntities(word).trim();
-    if (decoded) texts.push(decoded);
-  }
-
-  // Older timedtext format: <text start="..." dur="...">...</text>
-  if (texts.length === 0) {
-    const textTagRe = /<text\s[^>]*>([^<]*)<\/text>/g;
-    while ((m = textTagRe.exec(xml)) !== null) {
-      const decoded = decodeHtmlEntities(m[1]).trim();
-      if (decoded) texts.push(decoded);
-    }
-  }
-
-  return texts.join(" ").replace(/\s+/g, " ").trim();
-}
+// ── Transcript fetching via TranscriptAPI.com ─────────────────────────────────
 
 type TranscriptResult =
   | { ok: true; text: string }
   | { ok: false; reason: string };
 
 async function fetchTranscript(videoId: string): Promise<TranscriptResult> {
+  const apiKey = process.env.TRANSCRIPT_API_KEY;
+  if (!apiKey) {
+    return { ok: false, reason: "TRANSCRIPT_API_KEY not configured" };
+  }
+
   try {
-    // 1. Hit YouTube's InnerTube API to get caption track list
-    const playerResp = await fetch(
-      "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent":
-            "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
-        },
-        body: JSON.stringify({
-          context: {
-            client: { clientName: "ANDROID", clientVersion: "20.10.38" },
-          },
-          videoId,
-        }),
-      }
-    );
-
-    if (!playerResp.ok) {
-      return { ok: false, reason: `InnerTube API returned HTTP ${playerResp.status}` };
-    }
-
-    const playerData = (await playerResp.json()) as Record<string, any>;
-
-    // Check if video is playable
-    const playability = playerData?.playabilityStatus?.status;
-    if (playability && playability !== "OK") {
-      const reason = playerData?.playabilityStatus?.reason ?? playability;
-      return { ok: false, reason: `Video not playable: ${reason}` };
-    }
-
-    const tracks: any[] | undefined =
-      playerData?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-
-    if (!Array.isArray(tracks) || tracks.length === 0) {
-      return { ok: false, reason: "No caption tracks available for this video (captions may be disabled or unavailable)" };
-    }
-
-    // Prefer English, fall back to first available
-    const track =
-      tracks.find((t) => t.languageCode === "en") ??
-      tracks.find((t) => String(t.languageCode).startsWith("en")) ??
-      tracks[0];
-
-    const captionUrl: string | undefined = track?.baseUrl;
-    if (!captionUrl) {
-      return { ok: false, reason: "Caption track found but has no URL" };
-    }
-
-    // 2. Fetch the caption XML
-    const captResp = await fetch(captionUrl, {
-      headers: { "User-Agent": "Mozilla/5.0" },
+    const url = `https://transcriptapi.com/api/v2/youtube/transcript?video_url=${encodeURIComponent(videoId)}&format=json`;
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${apiKey}` },
     });
-    if (!captResp.ok) {
-      return { ok: false, reason: `Caption XML fetch failed: HTTP ${captResp.status}` };
+
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => "");
+      return { ok: false, reason: `TranscriptAPI returned HTTP ${resp.status}: ${body.slice(0, 200)}` };
     }
 
-    const xml = await captResp.text();
-    const text = parseTranscriptXml(xml);
+    const data = (await resp.json()) as { transcript?: { text: string }[]; segments?: { text: string }[]; error?: string };
+
+    if (data.error) {
+      return { ok: false, reason: `TranscriptAPI error: ${data.error}` };
+    }
+
+    const segments = data.transcript ?? data.segments;
+
+    if (!Array.isArray(segments) || segments.length === 0) {
+      return { ok: false, reason: "No transcript segments returned — captions may be disabled on this video" };
+    }
+
+    const text = segments
+      .map((s) => s.text?.trim())
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
 
     if (text.length <= 50) {
-      return { ok: false, reason: `Transcript parsed but was too short (${text.length} chars) — possibly empty captions` };
+      return { ok: false, reason: `Transcript too short (${text.length} chars)` };
     }
 
     return { ok: true, text };
