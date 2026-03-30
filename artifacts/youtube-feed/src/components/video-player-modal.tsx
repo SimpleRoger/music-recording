@@ -22,6 +22,7 @@ interface StructuredSummary {
 interface SummaryResult {
   structured: StructuredSummary;
   transcriptUsed: boolean;
+  transcriptFailReason: string | null;
 }
 
 interface VideoPlayerModalProps {
@@ -122,10 +123,15 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
       }
       const data = await resp.json();
       if (data.structured) {
-        setResult({ structured: data.structured, transcriptUsed: data.transcriptUsed ?? false });
+        setResult({
+          structured: data.structured,
+          transcriptUsed: data.transcriptUsed ?? false,
+          transcriptFailReason: data.transcriptFailReason ?? null,
+        });
       } else {
         setResult({
           transcriptUsed: false,
+          transcriptFailReason: null,
           structured: {
             tldr: "", overview: data.summary ?? "", topicsCovered: [],
             keyTakeaways: [], notableDetails: [], audience: "", verdict: "",
@@ -258,7 +264,10 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
                   <h3 className="font-bold text-text-main text-sm">AI Analysis</h3>
                 </div>
                 {result && (
-                  <div className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${result.transcriptUsed ? "bg-green-500/10 border-green-500/20 text-green-400" : "bg-yellow-500/10 border-yellow-500/20 text-yellow-400"}`}>
+                  <div
+                    title={result.transcriptUsed ? "Summary generated from the real video transcript" : `Transcript unavailable — used video description instead.\n\nReason: ${result.transcriptFailReason ?? "unknown"}`}
+                    className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border cursor-help ${result.transcriptUsed ? "bg-green-500/10 border-green-500/20 text-green-400" : "bg-yellow-500/10 border-yellow-500/20 text-yellow-400"}`}
+                  >
                     <FileSearch className="w-2.5 h-2.5" />
                     {result.transcriptUsed ? "From transcript" : "From description"}
                   </div>

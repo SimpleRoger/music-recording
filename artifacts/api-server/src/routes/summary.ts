@@ -47,7 +47,11 @@ function parseTranscriptXml(xml: string): string {
   return texts.join(" ").replace(/\s+/g, " ").trim();
 }
 
-async function fetchTranscript(videoId: string): Promise<string | null> {
+type TranscriptResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: string };
+
+async function fetchTranscript(videoId: string): Promise<TranscriptResult> {
   try {
     // 1. Hit YouTube's InnerTube API to get caption track list
     const playerResp = await fetch(
@@ -68,13 +72,25 @@ async function fetchTranscript(videoId: string): Promise<string | null> {
       }
     );
 
-    if (!playerResp.ok) return null;
+    if (!playerResp.ok) {
+      return { ok: false, reason: `InnerTube API returned HTTP ${playerResp.status}` };
+    }
 
     const playerData = (await playerResp.json()) as Record<string, any>;
+
+    // Check if video is playable
+    const playability = playerData?.playabilityStatus?.status;
+    if (playability && playability !== "OK") {
+      const reason = playerData?.playabilityStatus?.reason ?? playability;
+      return { ok: false, reason: `Video not playable: ${reason}` };
+    }
+
     const tracks: any[] | undefined =
       playerData?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
 
-    if (!Array.isArray(tracks) || tracks.length === 0) return null;
+    if (!Array.isArray(tracks) || tracks.length === 0) {
+      return { ok: false, reason: "No caption tracks available for this video (captions may be disabled or unavailable)" };
+    }
 
     // Prefer English, fall back to first available
     const track =
@@ -83,20 +99,28 @@ async function fetchTranscript(videoId: string): Promise<string | null> {
       tracks[0];
 
     const captionUrl: string | undefined = track?.baseUrl;
-    if (!captionUrl) return null;
+    if (!captionUrl) {
+      return { ok: false, reason: "Caption track found but has no URL" };
+    }
 
     // 2. Fetch the caption XML
     const captResp = await fetch(captionUrl, {
       headers: { "User-Agent": "Mozilla/5.0" },
     });
-    if (!captResp.ok) return null;
+    if (!captResp.ok) {
+      return { ok: false, reason: `Caption XML fetch failed: HTTP ${captResp.status}` };
+    }
 
     const xml = await captResp.text();
     const text = parseTranscriptXml(xml);
 
-    return text.length > 50 ? text : null;
-  } catch {
-    return null;
+    if (text.length <= 50) {
+      return { ok: false, reason: `Transcript parsed but was too short (${text.length} chars) — possibly empty captions` };
+    }
+
+    return { ok: true, text };
+  } catch (err: any) {
+    return { ok: false, reason: `Unexpected error: ${err?.message ?? String(err)}` };
   }
 }
 
@@ -111,18 +135,25 @@ router.post("/videos/summary", async (req, res): Promise<void> => {
 
   const { videoId, title, description, channelName } = parsed.data;
 
-  const transcript = await fetchTranscript(videoId);
-  const transcriptUsed = transcript !== null;
+  const transcriptResult = await fetchTranscript(videoId);
+  const transcriptUsed = transcriptResult.ok;
+  const transcriptFailReason = transcriptResult.ok ? null : transcriptResult.reason;
+
+  if (!transcriptResult.ok) {
+    req.log.warn({ videoId, reason: transcriptResult.reason }, "transcript fetch failed — falling back to description");
+  }
+
   const sourceLabel = transcriptUsed ? "FULL TRANSCRIPT" : "DESCRIPTION";
+  const rawTranscript = transcriptResult.ok ? transcriptResult.text : null;
 
   // Transcripts can be very long — take up to ~14 000 chars
-  const sourceText = transcriptUsed
-    ? transcript!.slice(0, 14000)
+  const sourceText = rawTranscript
+    ? rawTranscript.slice(0, 14000)
     : description?.slice(0, 6000) ?? "(no content available)";
 
   const truncationNote =
-    transcriptUsed && transcript!.length > 14000
-      ? `\n(Note: transcript truncated at 14 000 of ${transcript!.length} chars)`
+    rawTranscript && rawTranscript.length > 14000
+      ? `\n(Note: transcript truncated at 14 000 of ${rawTranscript.length} chars)`
       : "";
 
   const prompt = `You are an expert content analyst. Produce an extremely thorough breakdown of this YouTube video so the reader gains its full value without watching.
@@ -193,6 +224,7 @@ Rules:
   res.json({
     summary: data.overview ?? data.tldr ?? "",
     transcriptUsed,
+    transcriptFailReason,
     structured: {
       tldr: data.tldr ?? "",
       overview: data.overview ?? "",
