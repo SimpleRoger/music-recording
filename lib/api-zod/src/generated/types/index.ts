@@ -15,6 +15,8 @@ export * from "./healthStatus";
 export * from "./listBeatsParams";
 export * from "./listVideosParams";
 export * from "./searchBeatChannelsParams";
+export * from "./searchBeatsOrder";
+export * from "./searchBeatsParams";
 export * from "./searchChannelsParams";
 export * from "./video";
 export * from "./videoSummaryRequest";

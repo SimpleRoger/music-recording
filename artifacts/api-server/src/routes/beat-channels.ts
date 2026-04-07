@@ -73,6 +73,59 @@ router.get("/beats", async (req, res): Promise<void> => {
   res.json(videos);
 });
 
+router.get("/beats/search", async (req, res): Promise<void> => {
+  const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+  const order = typeof req.query.order === "string" && ["relevance", "date", "viewCount"].includes(req.query.order)
+    ? req.query.order
+    : "relevance";
+  const maxResults = Math.min(parseInt(typeof req.query.maxResults === "string" ? req.query.maxResults : "10", 10) || 10, 25);
+
+  if (!q) { res.json([]); return; }
+
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) { res.status(500).json({ error: "YouTube API key not configured" }); return; }
+
+  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(q)}&order=${order}&maxResults=${maxResults}&key=${apiKey}`;
+  const searchResp = await fetch(url);
+  if (!searchResp.ok) {
+    res.status(500).json({ error: "YouTube search failed" });
+    return;
+  }
+
+  const searchData = (await searchResp.json()) as {
+    items?: Array<{
+      id: { videoId: string };
+      snippet: { title: string; description: string; publishedAt: string; channelId: string; channelTitle: string; thumbnails?: { medium?: { url: string }; default?: { url: string } } };
+    }>;
+  };
+
+  const items = searchData.items ?? [];
+  if (items.length === 0) { res.json([]); return; }
+
+  const videoIds = items.map((i) => i.id.videoId).join(",");
+  let statsMap = new Map<string, { viewCount?: string; duration?: string }>();
+  const vResp = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${encodeURIComponent(videoIds)}&key=${apiKey}`);
+  if (vResp.ok) {
+    const vData = (await vResp.json()) as { items?: Array<{ id: string; statistics?: { viewCount?: string }; contentDetails?: { duration?: string } }> };
+    for (const v of vData.items ?? []) statsMap.set(v.id, { viewCount: v.statistics?.viewCount, duration: v.contentDetails?.duration });
+  }
+
+  const results = items.map((item) => ({
+    videoId: item.id.videoId,
+    title: item.snippet.title,
+    description: item.snippet.description,
+    thumbnailUrl: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? `https://img.youtube.com/vi/${item.id.videoId}/mqdefault.jpg`,
+    publishedAt: item.snippet.publishedAt,
+    viewCount: statsMap.get(item.id.videoId)?.viewCount ?? null,
+    channelId: item.snippet.channelId,
+    channelName: item.snippet.channelTitle,
+    channelThumbnailUrl: null,
+    duration: statsMap.get(item.id.videoId)?.duration ?? null,
+  }));
+
+  res.json(results);
+});
+
 router.get("/beats/:videoId/similar", async (req, res): Promise<void> => {
   const { videoId } = req.params;
   const title = typeof req.query.title === "string" ? req.query.title : "";

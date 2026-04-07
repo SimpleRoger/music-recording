@@ -251,6 +251,47 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /beats/search:
+    get:
+      operationId: searchBeats
+      tags: [beats]
+      summary: Search YouTube for beats by query
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [relevance, date, viewCount]
+            default: relevance
+          description: Sort order
+        - name: maxResults
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Video"
+        "500":
+          description: API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /beats/{videoId}/similar:
     get:
       operationId: getSimilarBeats

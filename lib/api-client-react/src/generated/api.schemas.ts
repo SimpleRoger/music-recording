@@ -80,6 +80,27 @@ export type ListBeatsParams = {
   channelId?: number;
 };
 
+export type SearchBeatsParams = {
+  /**
+   * Search query
+   */
+  q: string;
+  /**
+   * Sort order
+   */
+  order?: SearchBeatsOrder;
+  maxResults?: number;
+};
+
+export type SearchBeatsOrder =
+  (typeof SearchBeatsOrder)[keyof typeof SearchBeatsOrder];
+
+export const SearchBeatsOrder = {
+  relevance: "relevance",
+  date: "date",
+  viewCount: "viewCount",
+} as const;
+
 export type GetSimilarBeatsParams = {
   title: string;
 };

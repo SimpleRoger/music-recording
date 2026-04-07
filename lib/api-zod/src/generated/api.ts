@@ -151,6 +151,35 @@ export const ListBeatsResponseItem = zod.object({
 export const ListBeatsResponse = zod.array(ListBeatsResponseItem);
 
 /**
+ * @summary Search YouTube for beats by query
+ */
+export const searchBeatsQueryOrderDefault = `relevance`;
+export const searchBeatsQueryMaxResultsDefault = 10;
+
+export const SearchBeatsQueryParams = zod.object({
+  q: zod.coerce.string().describe("Search query"),
+  order: zod
+    .enum(["relevance", "date", "viewCount"])
+    .default(searchBeatsQueryOrderDefault)
+    .describe("Sort order"),
+  maxResults: zod.coerce.number().default(searchBeatsQueryMaxResultsDefault),
+});
+
+export const SearchBeatsResponseItem = zod.object({
+  videoId: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  thumbnailUrl: zod.string(),
+  publishedAt: zod.coerce.date(),
+  viewCount: zod.string().nullish(),
+  channelId: zod.string(),
+  channelName: zod.string(),
+  channelThumbnailUrl: zod.string().nullish(),
+  duration: zod.string().nullish(),
+});
+export const SearchBeatsResponse = zod.array(SearchBeatsResponseItem);
+
+/**
  * @summary Get similar beats for a given video
  */
 export const GetSimilarBeatsParams = zod.object({
