@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "wouter";
-import { Plus, Music2, AlertCircle, RefreshCw, Tv2, FileText, Search, X, SlidersHorizontal, Loader2 } from "lucide-react";
+import { Plus, Music2, AlertCircle, RefreshCw, Tv2, FileText, Search, X, SlidersHorizontal, Loader2, Mic } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBeats, useSearchBeats, type BeatSortOrder } from "../hooks/use-beats";
 import { useBeatChannels, useRemoveBeatChannel } from "../hooks/use-beat-channels";
@@ -74,6 +74,11 @@ export default function Beats() {
             <Link href="/lyrics">
               <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
                 <FileText className="w-3.5 h-3.5" />Lyrics
+              </span>
+            </Link>
+            <Link href="/recordings">
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
+                <Mic className="w-3.5 h-3.5" />Recordings
               </span>
             </Link>
           </nav>

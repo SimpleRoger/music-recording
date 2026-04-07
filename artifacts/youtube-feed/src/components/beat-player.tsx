@@ -3,11 +3,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   X, ChevronDown, ChevronUp, ExternalLink, Music2,
   Sparkles, Loader2, FileText, Download, CheckCircle2,
-  Mic, Square, Trash2,
+  Mic, Square, Trash2, Cloud, CloudOff,
 } from "lucide-react";
 import type { Video } from "@workspace/api-client-react";
 import { formatDuration } from "../lib/utils";
 import { useSimilarBeats } from "../hooks/use-beats";
+import { useUploadRecording } from "../hooks/use-recordings";
 import { BeatCard } from "./beat-card";
 
 const LYRICS_KEY = (videoId: string) => `tubefeed-lyrics-${videoId}`;
@@ -21,6 +22,7 @@ interface BeatPlayerProps {
 
 type DownloadState = "idle" | "downloading" | "done";
 type RecordState = "idle" | "requesting" | "recording" | "done";
+type CloudSaveState = "idle" | "uploading" | "saved" | "error";
 
 function formatSeconds(s: number) {
   return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
@@ -37,6 +39,8 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [recordMime, setRecordMime] = useState("audio/webm");
+  const [cloudSaveState, setCloudSaveState] = useState<CloudSaveState>("idle");
+  const recordingBlobRef = useRef<Blob | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -49,27 +53,32 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     beat?.title ?? "",
     isOpen
   );
+  const uploadRecording = useUploadRecording();
 
-  // Load saved lyrics when beat changes; also stop/discard any recording
+  const resetRecording = useCallback((revokeUrl = true) => {
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    if (revokeUrl && recordingUrl) URL.revokeObjectURL(recordingUrl);
+    recordingBlobRef.current = null;
+    setRecordingUrl(null);
+    setRecordState("idle");
+    setRecordSeconds(0);
+    setCloudSaveState("idle");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingUrl]);
+
+  // Reset recording & lyrics when beat changes
   useEffect(() => {
     if (beat) {
       const saved = localStorage.getItem(LYRICS_KEY(beat.videoId)) ?? "";
       setLyrics(saved);
       setVideoExpanded(false);
-      // Stop in-flight recording if beat changes
-      if (mediaRecorderRef.current?.state === "recording") {
-        mediaRecorderRef.current.stop();
-      }
-      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
-      if (recordingUrl) URL.revokeObjectURL(recordingUrl);
-      setRecordingUrl(null);
-      setRecordState("idle");
-      setRecordSeconds(0);
+      resetRecording();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beat?.videoId]);
 
-  // Save beat metadata so Lyrics page can display it
+  // Save beat metadata
   useEffect(() => {
     if (!beat) return;
     localStorage.setItem(BEAT_META_KEY(beat.videoId), JSON.stringify({
@@ -154,6 +163,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
       };
       mr.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mime });
+        recordingBlobRef.current = blob;
         const url = URL.createObjectURL(blob);
         setRecordingUrl(url);
         setRecordState("done");
@@ -177,12 +187,27 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
   }, []);
 
-  const discardRecording = useCallback(() => {
-    if (recordingUrl) URL.revokeObjectURL(recordingUrl);
-    setRecordingUrl(null);
-    setRecordState("idle");
-    setRecordSeconds(0);
-  }, [recordingUrl]);
+  const handleSaveToCloud = useCallback(async () => {
+    if (!beat || !recordingBlobRef.current || cloudSaveState === "uploading") return;
+    setCloudSaveState("uploading");
+    try {
+      await uploadRecording.mutateAsync({
+        blob: recordingBlobRef.current,
+        mime: recordMime,
+        meta: {
+          beatVideoId: beat.videoId,
+          beatTitle: beat.title,
+          beatChannelName: beat.channelName,
+          beatThumbnailUrl: beat.thumbnailUrl,
+          objectPath: "",
+          durationSeconds: recordSeconds,
+        },
+      });
+      setCloudSaveState("saved");
+    } catch {
+      setCloudSaveState("error");
+    }
+  }, [beat, recordMime, recordSeconds, cloudSaveState, uploadRecording]);
 
   const downloadFreestyle = useCallback(() => {
     if (!recordingUrl || !beat) return;
@@ -205,7 +230,6 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -214,7 +238,6 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
             onClick={onClose}
           />
 
-          {/* Panel */}
           <motion.div
             initial={{ y: 60, opacity: 0, scale: 0.97 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
@@ -222,7 +245,6 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
             transition={{ type: "spring", damping: 28, stiffness: 320 }}
             className="relative z-10 w-full max-w-5xl max-h-[94vh] bg-surface border border-border rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col lg:flex-row shadow-[0_32px_80px_-16px_rgba(0,0,0,0.7)]"
           >
-            {/* Close */}
             <button onClick={onClose} className="absolute top-3 right-3 z-20 p-1.5 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/80 transition-colors">
               <X className="w-5 h-5" />
             </button>
@@ -243,9 +265,8 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                       {duration && <span className="text-xs text-text-muted shrink-0">· {duration}</span>}
                     </div>
 
-                    {/* Action buttons row */}
+                    {/* Action buttons */}
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      {/* Download beat */}
                       <button
                         onClick={handleDownload}
                         disabled={downloadState === "downloading"}
@@ -267,7 +288,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                       </button>
 
                       {/* Record button */}
-                      {recordState === "idle" || recordState === "requesting" ? (
+                      {(recordState === "idle" || recordState === "requesting") && (
                         <button
                           onClick={startRecording}
                           disabled={recordState === "requesting"}
@@ -279,7 +300,9 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                             <><Mic className="w-3.5 h-3.5" />Record</>
                           )}
                         </button>
-                      ) : recordState === "recording" ? (
+                      )}
+
+                      {recordState === "recording" && (
                         <button
                           onClick={stopRecording}
                           className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20 transition-all"
@@ -288,7 +311,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                           {formatSeconds(recordSeconds)}
                           <Square className="w-3 h-3 ml-0.5" />
                         </button>
-                      ) : null}
+                      )}
                     </div>
 
                     {/* Recorded playback widget */}
@@ -301,27 +324,59 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                           transition={{ duration: 0.2 }}
                           className="overflow-hidden"
                         >
-                          <div className="mt-2.5 p-2.5 rounded-xl bg-red-500/5 border border-red-500/15 flex flex-col gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">Freestyle · {formatSeconds(recordSeconds)}</span>
+                          <div className="mt-2.5 p-3 rounded-xl bg-red-500/5 border border-red-500/15 flex flex-col gap-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">
+                                Freestyle · {formatSeconds(recordSeconds)}
+                              </span>
                             </div>
+
                             <audio
                               src={recordingUrl}
                               controls
                               className="w-full h-8"
                               style={{ accentColor: "#ef4444" }}
                             />
-                            <div className="flex items-center gap-2">
+
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* Save to cloud */}
+                              <button
+                                onClick={handleSaveToCloud}
+                                disabled={cloudSaveState === "uploading" || cloudSaveState === "saved"}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                                  cloudSaveState === "saved"
+                                    ? "bg-green-500/10 text-green-400 border-green-500/20 cursor-default"
+                                    : cloudSaveState === "error"
+                                    ? "bg-red-500/10 text-red-400 border-red-500/20"
+                                    : cloudSaveState === "uploading"
+                                    ? "bg-surface text-text-muted border-border cursor-not-allowed"
+                                    : "bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20"
+                                }`}
+                              >
+                                {cloudSaveState === "uploading" ? (
+                                  <><Loader2 className="w-3 h-3 animate-spin" />Saving…</>
+                                ) : cloudSaveState === "saved" ? (
+                                  <><CheckCircle2 className="w-3 h-3" />Saved to cloud</>
+                                ) : cloudSaveState === "error" ? (
+                                  <><CloudOff className="w-3 h-3" />Retry save</>
+                                ) : (
+                                  <><Cloud className="w-3 h-3" />Save to cloud</>
+                                )}
+                              </button>
+
+                              {/* Local download */}
                               <button
                                 onClick={downloadFreestyle}
-                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-text-muted hover:text-text-main border border-border hover:border-primary/30 transition-all"
                               >
                                 <Download className="w-3 h-3" />
-                                Save recording
+                                Download
                               </button>
+
+                              {/* Discard */}
                               <button
-                                onClick={discardRecording}
-                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-text-muted hover:text-red-400 border border-border hover:border-red-500/20 transition-all"
+                                onClick={() => resetRecording()}
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-text-muted hover:text-red-400 border border-border hover:border-red-500/20 transition-all ml-auto"
                               >
                                 <Trash2 className="w-3 h-3" />
                                 Discard

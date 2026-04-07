@@ -4,6 +4,8 @@ import channelsRouter from "./channels";
 import videosRouter from "./videos";
 import summaryRouter from "./summary";
 import beatChannelsRouter from "./beat-channels";
+import storageRouter from "./storage";
+import recordingsRouter from "./recordings";
 
 const router: IRouter = Router();
 
@@ -12,5 +14,7 @@ router.use(channelsRouter);
 router.use(videosRouter);
 router.use(summaryRouter);
 router.use(beatChannelsRouter);
+router.use(storageRouter);
+router.use(recordingsRouter);
 
 export default router;

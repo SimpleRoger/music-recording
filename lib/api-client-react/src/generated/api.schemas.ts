@@ -58,6 +58,37 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface RequestUploadUrlBody {
+  name: string;
+  size: number;
+  contentType: string;
+}
+
+export interface RequestUploadUrlResponse {
+  uploadURL: string;
+  objectPath: string;
+}
+
+export interface RecordingItem {
+  id: number;
+  beatVideoId: string;
+  beatTitle: string;
+  beatChannelName: string;
+  beatThumbnailUrl: string;
+  objectPath: string;
+  durationSeconds: number;
+  createdAt: string;
+}
+
+export interface CreateRecordingBody {
+  beatVideoId: string;
+  beatTitle: string;
+  beatChannelName: string;
+  beatThumbnailUrl: string;
+  objectPath: string;
+  durationSeconds: number;
+}
+
 export type SearchChannelsParams = {
   /**
    * Search query

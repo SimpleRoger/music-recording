@@ -17,6 +17,10 @@ tags:
     description: AI-powered features
   - name: beats
     description: Beat channels and beat videos
+  - name: storage
+    description: Object storage upload
+  - name: recordings
+    description: Cloud-saved freestyle recordings
 paths:
   /healthz:
     get:
@@ -341,6 +345,69 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request a presigned upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUploadUrlBody"
+      responses:
+        "200":
+          description: Presigned URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestUploadUrlResponse"
+  /recordings:
+    get:
+      operationId: listRecordings
+      tags: [recordings]
+      summary: List all saved recordings
+      responses:
+        "200":
+          description: List of recordings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecordingItem"
+    post:
+      operationId: createRecording
+      tags: [recordings]
+      summary: Save a new recording metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRecordingBody"
+      responses:
+        "201":
+          description: Created recording
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingItem"
+  /recordings/{id}:
+    delete:
+      operationId: deleteRecording
+      tags: [recordings]
+      summary: Delete a recording
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
 components:
   schemas:
     HealthStatus:
@@ -462,3 +529,76 @@ components:
           type: string
       required:
         - error
+    RequestUploadUrlBody:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+      required:
+        - name
+        - size
+        - contentType
+    RequestUploadUrlResponse:
+      type: object
+      properties:
+        uploadURL:
+          type: string
+        objectPath:
+          type: string
+      required:
+        - uploadURL
+        - objectPath
+    RecordingItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        beatVideoId:
+          type: string
+        beatTitle:
+          type: string
+        beatChannelName:
+          type: string
+        beatThumbnailUrl:
+          type: string
+        objectPath:
+          type: string
+        durationSeconds:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - beatVideoId
+        - beatTitle
+        - beatChannelName
+        - beatThumbnailUrl
+        - objectPath
+        - durationSeconds
+        - createdAt
+    CreateRecordingBody:
+      type: object
+      properties:
+        beatVideoId:
+          type: string
+        beatTitle:
+          type: string
+        beatChannelName:
+          type: string
+        beatThumbnailUrl:
+          type: string
+        objectPath:
+          type: string
+        durationSeconds:
+          type: integer
+      required:
+        - beatVideoId
+        - beatTitle
+        - beatChannelName
+        - beatThumbnailUrl
+        - objectPath
+        - durationSeconds

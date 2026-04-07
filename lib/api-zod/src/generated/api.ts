@@ -217,3 +217,51 @@ export const GetVideoSummaryBody = zod.object({
 export const GetVideoSummaryResponse = zod.object({
   summary: zod.string(),
 });
+
+/**
+ * @summary Request a presigned upload URL
+ */
+export const RequestUploadUrlBody = zod.object({
+  name: zod.string(),
+  size: zod.number(),
+  contentType: zod.string(),
+});
+
+export const RequestUploadUrlResponse = zod.object({
+  uploadURL: zod.string(),
+  objectPath: zod.string(),
+});
+
+/**
+ * @summary List all saved recordings
+ */
+export const ListRecordingsResponseItem = zod.object({
+  id: zod.number(),
+  beatVideoId: zod.string(),
+  beatTitle: zod.string(),
+  beatChannelName: zod.string(),
+  beatThumbnailUrl: zod.string(),
+  objectPath: zod.string(),
+  durationSeconds: zod.number(),
+  createdAt: zod.string(),
+});
+export const ListRecordingsResponse = zod.array(ListRecordingsResponseItem);
+
+/**
+ * @summary Save a new recording metadata
+ */
+export const CreateRecordingBody = zod.object({
+  beatVideoId: zod.string(),
+  beatTitle: zod.string(),
+  beatChannelName: zod.string(),
+  beatThumbnailUrl: zod.string(),
+  objectPath: zod.string(),
+  durationSeconds: zod.number(),
+});
+
+/**
+ * @summary Delete a recording
+ */
+export const DeleteRecordingParams = zod.object({
+  id: zod.coerce.number(),
+});

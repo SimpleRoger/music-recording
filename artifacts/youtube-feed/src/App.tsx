@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Home from "./pages/home";
 import Beats from "./pages/beats";
 import Lyrics from "./pages/lyrics";
+import Recordings from "./pages/recordings";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,6 +21,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/beats" component={Beats} />
       <Route path="/lyrics" component={Lyrics} />
+      <Route path="/recordings" component={Recordings} />
       <Route>
         <div className="min-h-screen bg-background flex flex-col items-center justify-center text-center p-4">
           <h1 className="text-6xl font-display font-bold text-text-main mb-4">404</h1>

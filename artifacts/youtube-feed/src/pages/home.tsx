@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Plus, Youtube, AlertCircle, RefreshCw, Music2, FileText } from "lucide-react";
+import { Plus, Youtube, AlertCircle, RefreshCw, Music2, FileText, Mic } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "../lib/utils";
 import { useVideos } from "../hooks/use-videos";
@@ -52,6 +52,11 @@ export default function Home() {
             <Link href="/lyrics">
               <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
                 <FileText className="w-3.5 h-3.5" />Lyrics
+              </span>
+            </Link>
+            <Link href="/recordings">
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
+                <Mic className="w-3.5 h-3.5" />Recordings
               </span>
             </Link>
           </nav>

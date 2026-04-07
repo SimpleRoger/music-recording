@@ -20,11 +20,15 @@ import type {
   AddChannelRequest,
   Channel,
   ChannelSearchResult,
+  CreateRecordingBody,
   ErrorResponse,
   GetSimilarBeatsParams,
   HealthStatus,
   ListBeatsParams,
   ListVideosParams,
+  RecordingItem,
+  RequestUploadUrlBody,
+  RequestUploadUrlResponse,
   SearchBeatChannelsParams,
   SearchBeatsParams,
   SearchChannelsParams,
@@ -1277,4 +1281,335 @@ export const useGetVideoSummary = <
   TContext
 > => {
   return useMutation(getGetVideoSummaryMutationOptions(options));
+};
+
+/**
+ * @summary Request a presigned upload URL
+ */
+export const getRequestUploadUrlUrl = () => {
+  return `/api/storage/uploads/request-url`;
+};
+
+export const requestUploadUrl = async (
+  requestUploadUrlBody: RequestUploadUrlBody,
+  options?: RequestInit,
+): Promise<RequestUploadUrlResponse> => {
+  return customFetch<RequestUploadUrlResponse>(getRequestUploadUrlUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(requestUploadUrlBody),
+  });
+};
+
+export const getRequestUploadUrlMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    TError,
+    { data: BodyType<RequestUploadUrlBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof requestUploadUrl>>,
+  TError,
+  { data: BodyType<RequestUploadUrlBody> },
+  TContext
+> => {
+  const mutationKey = ["requestUploadUrl"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    { data: BodyType<RequestUploadUrlBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return requestUploadUrl(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RequestUploadUrlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof requestUploadUrl>>
+>;
+export type RequestUploadUrlMutationBody = BodyType<RequestUploadUrlBody>;
+export type RequestUploadUrlMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Request a presigned upload URL
+ */
+export const useRequestUploadUrl = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    TError,
+    { data: BodyType<RequestUploadUrlBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof requestUploadUrl>>,
+  TError,
+  { data: BodyType<RequestUploadUrlBody> },
+  TContext
+> => {
+  return useMutation(getRequestUploadUrlMutationOptions(options));
+};
+
+/**
+ * @summary List all saved recordings
+ */
+export const getListRecordingsUrl = () => {
+  return `/api/recordings`;
+};
+
+export const listRecordings = async (
+  options?: RequestInit,
+): Promise<RecordingItem[]> => {
+  return customFetch<RecordingItem[]>(getListRecordingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRecordingsQueryKey = () => {
+  return [`/api/recordings`] as const;
+};
+
+export const getListRecordingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRecordings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listRecordings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListRecordingsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listRecordings>>> = ({
+    signal,
+  }) => listRecordings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRecordings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRecordingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRecordings>>
+>;
+export type ListRecordingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all saved recordings
+ */
+
+export function useListRecordings<
+  TData = Awaited<ReturnType<typeof listRecordings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listRecordings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRecordingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Save a new recording metadata
+ */
+export const getCreateRecordingUrl = () => {
+  return `/api/recordings`;
+};
+
+export const createRecording = async (
+  createRecordingBody: CreateRecordingBody,
+  options?: RequestInit,
+): Promise<RecordingItem> => {
+  return customFetch<RecordingItem>(getCreateRecordingUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createRecordingBody),
+  });
+};
+
+export const getCreateRecordingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRecording>>,
+    TError,
+    { data: BodyType<CreateRecordingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createRecording>>,
+  TError,
+  { data: BodyType<CreateRecordingBody> },
+  TContext
+> => {
+  const mutationKey = ["createRecording"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createRecording>>,
+    { data: BodyType<CreateRecordingBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createRecording(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateRecordingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createRecording>>
+>;
+export type CreateRecordingMutationBody = BodyType<CreateRecordingBody>;
+export type CreateRecordingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Save a new recording metadata
+ */
+export const useCreateRecording = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRecording>>,
+    TError,
+    { data: BodyType<CreateRecordingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createRecording>>,
+  TError,
+  { data: BodyType<CreateRecordingBody> },
+  TContext
+> => {
+  return useMutation(getCreateRecordingMutationOptions(options));
+};
+
+/**
+ * @summary Delete a recording
+ */
+export const getDeleteRecordingUrl = (id: number) => {
+  return `/api/recordings/${id}`;
+};
+
+export const deleteRecording = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteRecordingUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteRecordingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteRecording>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteRecording>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteRecording"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteRecording>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteRecording(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteRecordingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteRecording>>
+>;
+
+export type DeleteRecordingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a recording
+ */
+export const useDeleteRecording = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteRecording>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteRecording>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteRecordingMutationOptions(options));
 };

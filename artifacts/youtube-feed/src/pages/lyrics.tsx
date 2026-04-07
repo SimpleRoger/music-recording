@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "wouter";
-import { Tv2, Music2, FileText, ChevronDown, ChevronUp, ExternalLink, Trash2, PenLine, Play } from "lucide-react";
+import { Tv2, Music2, FileText, ChevronDown, ChevronUp, ExternalLink, Trash2, PenLine, Play, Mic } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BeatPlayer } from "../components/beat-player";
 import type { Video } from "@workspace/api-client-react";
@@ -127,6 +127,11 @@ export default function Lyrics() {
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-semibold bg-primary/15 text-primary border border-primary/20">
               <FileText className="w-3.5 h-3.5" />Lyrics
             </span>
+            <Link href="/recordings">
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
+                <Mic className="w-3.5 h-3.5" />Recordings
+              </span>
+            </Link>
           </nav>
         </div>
       </header>

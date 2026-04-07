@@ -19,3 +19,4 @@
 
 export * from "./channels";
 export * from "./beat-channels";
+export * from "./recordings";
