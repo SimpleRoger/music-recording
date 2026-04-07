@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "wouter";
-import { Tv2, Music2, FileText, ChevronDown, ChevronUp, ExternalLink, Trash2, PenLine } from "lucide-react";
+import { Tv2, Music2, FileText, ChevronDown, ChevronUp, ExternalLink, Trash2, PenLine, Play } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { BeatPlayer } from "../components/beat-player";
+import type { Video } from "@workspace/api-client-react";
 
 interface BeatMeta {
   videoId: string;
@@ -39,14 +41,34 @@ function loadAllLyrics(): LyricEntry[] {
   return entries.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
+function metaToVideo(meta: BeatMeta): Video {
+  return {
+    videoId: meta.videoId,
+    title: meta.title,
+    description: "",
+    thumbnailUrl: meta.thumbnailUrl ?? `https://img.youtube.com/vi/${meta.videoId}/mqdefault.jpg`,
+    publishedAt: new Date(0).toISOString(),
+    viewCount: null,
+    channelId: "",
+    channelName: meta.channelName,
+    channelThumbnailUrl: null,
+    duration: null,
+  };
+}
+
 export default function Lyrics() {
   const [entries, setEntries] = useState<LyricEntry[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftLyrics, setDraftLyrics] = useState("");
+  const [activeBeat, setActiveBeat] = useState<Video | null>(null);
 
   useEffect(() => {
     setEntries(loadAllLyrics());
+  }, []);
+
+  const handlePlay = useCallback((meta: BeatMeta) => {
+    setActiveBeat(metaToVideo(meta));
   }, []);
 
   const handleDelete = (videoId: string) => {
@@ -158,19 +180,34 @@ export default function Lyrics() {
               >
                 {/* Card header */}
                 <div className="flex items-center gap-3 p-4">
-                  {entry.meta.thumbnailUrl ? (
-                    <img
-                      src={entry.meta.thumbnailUrl}
-                      alt={entry.meta.title}
-                      className="w-14 h-10 rounded-lg object-cover shrink-0 border border-border"
-                    />
-                  ) : (
-                    <div className="w-14 h-10 rounded-lg bg-surface-hover shrink-0 flex items-center justify-center border border-border">
-                      <Music2 className="w-5 h-5 text-text-muted/50" />
+                  {/* Clickable thumbnail */}
+                  <button
+                    onClick={() => handlePlay(entry.meta)}
+                    className="group relative shrink-0 w-14 h-10 rounded-lg overflow-hidden border border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    title="Play beat"
+                  >
+                    {entry.meta.thumbnailUrl ? (
+                      <img
+                        src={entry.meta.thumbnailUrl}
+                        alt={entry.meta.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-surface-hover flex items-center justify-center">
+                        <Music2 className="w-5 h-5 text-text-muted/50" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Play className="w-4 h-4 text-white" fill="currentColor" />
                     </div>
-                  )}
+                  </button>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-text-main line-clamp-1">{entry.meta.title}</p>
+                    <button
+                      onClick={() => handlePlay(entry.meta)}
+                      className="text-sm font-semibold text-text-main hover:text-primary transition-colors line-clamp-1 text-left"
+                    >
+                      {entry.meta.title}
+                    </button>
                     <p className="text-xs text-text-muted truncate">{entry.meta.channelName}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-[10px] text-text-muted bg-background px-1.5 py-0.5 rounded-full border border-border">
@@ -279,6 +316,12 @@ export default function Lyrics() {
           })}
         </div>
       </main>
+
+      <BeatPlayer
+        beat={activeBeat}
+        onClose={() => setActiveBeat(null)}
+        onBeatSelect={(beat) => setActiveBeat(beat)}
+      />
     </div>
   );
 }
