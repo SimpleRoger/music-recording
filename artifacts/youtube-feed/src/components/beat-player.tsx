@@ -76,41 +76,86 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     }
   }, []);
 
+  const vizFrameCount = useRef(0);
+
   const drawVisualizer = useCallback(() => {
     const canvas = vizCanvasRef.current;
     const analyser = analyserRef.current;
-    if (!canvas || !analyser) return;
+    if (!canvas || !analyser) {
+      console.error("[viz] missing:", { canvas: !!canvas, analyser: !!analyser });
+      return;
+    }
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const bufferLen = analyser.frequencyBinCount;
-    const dataArr = new Uint8Array(bufferLen);
-    analyser.getByteFrequencyData(dataArr);
-
     const W = canvas.width;
     const H = canvas.height;
-    const barCount = 40;
-    const gap = 2;
-    const barW = (W - gap * (barCount - 1)) / barCount;
+
+    // Time-domain waveform — raw samples 0-255, where 128 = silence
+    const tdLen = analyser.fftSize;
+    const td = new Uint8Array(tdLen);
+    analyser.getByteTimeDomainData(td);
+
+    // Log the first 5 frames so we can see if data flows
+    vizFrameCount.current += 1;
+    if (vizFrameCount.current <= 5) {
+      const acState = audioContextRef.current?.state ?? "no ctx";
+      console.error(`[viz] frame ${vizFrameCount.current} | ac=${acState} | td[0..4]=${Array.from(td.slice(0,5)).join(",")} | fftSize=${tdLen}`);
+    }
+
+    // Compute peak amplitude (0..1) — non-zero whenever mic has any signal
+    let peak = 0;
+    for (let i = 0; i < tdLen; i++) {
+      const v = Math.abs(td[i] - 128) / 128;
+      if (v > peak) peak = v;
+    }
 
     ctx.clearRect(0, 0, W, H);
 
-    const step = Math.floor(bufferLen / barCount);
-    for (let i = 0; i < barCount; i++) {
-      const val = dataArr[i * step] / 255; // 0..1
-      const barH = Math.max(3, val * H);
-      const x = i * (barW + gap);
-      const y = H - barH;
+    // Draw centre line (silence reference)
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, H / 2);
+    ctx.lineTo(W, H / 2);
+    ctx.stroke();
 
-      // Green → yellow → red gradient based on level
-      const r = Math.round(val < 0.5 ? val * 2 * 200 : 200 + (val - 0.5) * 2 * 55);
-      const g = Math.round(val < 0.5 ? 200 : (1 - (val - 0.5) * 2) * 200);
-      ctx.fillStyle = `rgb(${r},${g},30)`;
+    // Draw waveform line (centered: 128 = H/2, peaks fill ±H/2)
+    const sliceW = W / tdLen;
+    // Colour: green when quiet → yellow → red as loud
+    const r = Math.round(Math.min(255, peak * 2 * 255));
+    const g = Math.round(Math.max(0, (1 - peak * 1.5) * 220));
+
+    const buildPath = () => {
       ctx.beginPath();
-      ctx.roundRect(x, y, barW, barH, 2);
-      ctx.fill();
+      for (let i = 0; i < tdLen; i++) {
+        const y = H / 2 - ((td[i] - 128) / 128) * (H / 2);
+        if (i === 0) ctx.moveTo(0, y);
+        else ctx.lineTo(i * sliceW, y);
+      }
+    };
+
+    // Glow layer
+    if (peak > 0.02) {
+      ctx.strokeStyle = `rgba(${r},${g},30,0.2)`;
+      ctx.lineWidth = 7;
+      buildPath();
+      ctx.stroke();
     }
+
+    ctx.strokeStyle = `rgb(${r},${g},30)`;
+    ctx.lineWidth = 2;
+    buildPath();
+    ctx.stroke();
+
+    // Live peak dB readout (right edge) — useful for debugging
+    const dbVal = peak > 0 ? Math.round(20 * Math.log10(peak)) : -Infinity;
+    const dbText = isFinite(dbVal) ? `${dbVal} dB` : "–∞ dB";
+    ctx.font = "bold 9px monospace";
+    ctx.fillStyle = peak > 0.05 ? `rgb(${r},${g},30)` : "rgba(255,255,255,0.25)";
+    ctx.textAlign = "right";
+    ctx.fillText(dbText, W - 4, H - 4);
 
     animFrameRef.current = requestAnimationFrame(drawVisualizer);
   }, []);
@@ -217,6 +262,22 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   const startRecording = useCallback(async () => {
     if (recordState !== "idle") return;
     setRecordState("requesting");
+    vizFrameCount.current = 0;
+
+    // IMPORTANT: AudioContext must be created synchronously in the click handler.
+    // Browsers (Chrome/Safari) reject AudioContext creation after any await because
+    // the user-gesture context is lost. We create it here, then connect the mic stream
+    // once getUserMedia resolves.
+    let ac: AudioContext | null = null;
+    try {
+      ac = new AudioContext();
+      audioContextRef.current = ac;
+      // Fire-and-forget resume — don't await so we stay synchronous
+      if (ac.state === "suspended") ac.resume().catch(() => {});
+    } catch {
+      // Visualizer will be skipped, recording still works
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -243,27 +304,25 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
         stopVisualizer();
       };
 
-      // Set up audio visualizer (draw loop starts via useEffect after canvas mounts)
-      try {
-        const ac = new AudioContext();
-        // Browsers suspend AudioContext by default — must resume before audio flows
-        if (ac.state === "suspended") await ac.resume();
-        const source = ac.createMediaStreamSource(stream);
-        const analyser = ac.createAnalyser();
-        analyser.fftSize = 512;
-        analyser.smoothingTimeConstant = 0.6;
-        analyser.minDecibels = -90;
-        analyser.maxDecibels = -10;
-        source.connect(analyser);
-        // Connect to a silent gain node so the audio graph stays active in all browsers
-        const silent = ac.createGain();
-        silent.gain.value = 0;
-        analyser.connect(silent);
-        silent.connect(ac.destination);
-        audioContextRef.current = ac;
-        analyserRef.current = analyser;
-      } catch {
-        // Visualizer is optional — recording still works without it
+      // Connect mic stream to the already-created (and running) AudioContext
+      if (ac) {
+        try {
+          // Ensure it's running after the await gap
+          if (ac.state === "suspended") await ac.resume();
+          const source = ac.createMediaStreamSource(stream);
+          const analyser = ac.createAnalyser();
+          analyser.fftSize = 512;
+          analyser.smoothingTimeConstant = 0.55;
+          source.connect(analyser);
+          // Silent gain → destination keeps the graph active in all browsers
+          const silent = ac.createGain();
+          silent.gain.value = 0;
+          analyser.connect(silent);
+          silent.connect(ac.destination);
+          analyserRef.current = analyser;
+        } catch (e) {
+          console.error("[viz] analyser setup failed:", e);
+        }
       }
 
       mr.start(250);
@@ -271,6 +330,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
       setRecordSeconds(0);
       recordTimerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000);
     } catch {
+      if (ac) { ac.close().catch(() => {}); audioContextRef.current = null; }
       setRecordState("idle");
     }
   }, [recordState, stopVisualizer]);
@@ -428,10 +488,10 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                             </div>
                             <canvas
                               ref={vizCanvasRef}
-                              width={400}
-                              height={36}
+                              width={600}
+                              height={48}
                               className="w-full rounded-lg"
-                              style={{ background: "rgba(0,0,0,0.3)" }}
+                              style={{ background: "rgba(0,0,0,0.4)" }}
                             />
                           </div>
                         </motion.div>
