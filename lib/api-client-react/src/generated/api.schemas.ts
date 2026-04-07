@@ -71,3 +71,15 @@ export type ListVideosParams = {
    */
   channelId?: number;
 };
+
+export type SearchBeatChannelsParams = {
+  q: string;
+};
+
+export type ListBeatsParams = {
+  channelId?: number;
+};
+
+export type GetSimilarBeatsParams = {
+  title: string;
+};

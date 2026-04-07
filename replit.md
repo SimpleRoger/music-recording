@@ -62,6 +62,16 @@ React + Vite web app (at `/`) for aggregating recent YouTube videos from favouri
 - Fetches videos from the past 3 months, sorted by date, with view counts and duration
 - Clicking a video card opens an in-app player modal (YouTube iframe embed + AI summary generation)
 
+### Beats Tab
+
+Separate **Beats** section at `/beats` for music producers, entirely isolated from the main channel list.
+
+- **Beat Channels**: Stored in `beat_channels` DB table (separate from `channels`)
+- **Beat List**: Compact audio-first cards — click any beat to play it instantly
+- **Beat Player Modal**: Auto-playing YouTube iframe (collapsible), large lyrics notepad (auto-saves per beat to localStorage), similar beats sidebar
+- **Similar Beats**: YouTube search for related beats by title, shown in the player sidebar
+- **Backend**: Routes at `/api/beat-channels`, `/api/beat-channels/search`, `/api/beat-channels/{id}`, `/api/beats`, `/api/beats/{videoId}/similar`
+
 ## Packages
 
 ### `artifacts/youtube-feed` (`@workspace/youtube-feed`)

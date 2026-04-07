@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, Youtube, AlertCircle, RefreshCw } from "lucide-react";
+import { Link } from "wouter";
+import { Plus, Youtube, AlertCircle, RefreshCw, Music2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "../lib/utils";
 import { useVideos } from "../hooks/use-videos";
@@ -26,19 +27,29 @@ export default function Home() {
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Topbar */}
       <header className="h-16 border-b border-border glass-panel sticky top-0 z-40 flex items-center justify-between px-4 sm:px-6">
-        <div className="flex items-center gap-3">
-          <img 
-            src={`${import.meta.env.BASE_URL}images/logo.png`} 
-            className="w-9 h-9 rounded-xl shadow-lg" 
-            alt="Logo" 
-            onError={(e) => {
-              // Fallback if image not generated yet
-              (e.target as HTMLImageElement).style.display = 'none';
-            }}
-          />
-          <h1 className="font-display font-bold text-xl sm:text-2xl tracking-tight text-white flex items-center">
-            Tube<span className="text-primary ml-0.5">Feed</span>
-          </h1>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <img 
+              src={`${import.meta.env.BASE_URL}images/logo.png`} 
+              className="w-9 h-9 rounded-xl shadow-lg" 
+              alt="Logo" 
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+            <h1 className="font-display font-bold text-xl sm:text-2xl tracking-tight text-white flex items-center">
+              Tube<span className="text-primary ml-0.5">Feed</span>
+            </h1>
+          </div>
+          {/* Tabs */}
+          <nav className="flex items-center gap-1 bg-surface/60 border border-border rounded-xl px-1.5 py-1">
+            <span className="px-3 py-1 rounded-lg text-sm font-semibold bg-primary/15 text-primary border border-primary/20">
+              Feed
+            </span>
+            <Link href="/beats">
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
+                <Music2 className="w-3.5 h-3.5" />Beats
+              </span>
+            </Link>
+          </nav>
         </div>
         
         <button 

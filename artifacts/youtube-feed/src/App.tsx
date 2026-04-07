@@ -1,14 +1,14 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Home from "./pages/home";
+import Beats from "./pages/beats";
 
-// Configure query client with robust defaults for a feed application
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
-      staleTime: 1000 * 60 * 2, // 2 minutes
+      staleTime: 1000 * 60 * 2,
     },
   },
 });
@@ -17,6 +17,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/beats" component={Beats} />
       <Route>
         <div className="min-h-screen bg-background flex flex-col items-center justify-center text-center p-4">
           <h1 className="text-6xl font-display font-bold text-text-main mb-4">404</h1>

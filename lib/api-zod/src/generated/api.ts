@@ -84,6 +84,98 @@ export const ListVideosResponseItem = zod.object({
 export const ListVideosResponse = zod.array(ListVideosResponseItem);
 
 /**
+ * @summary List beat channels
+ */
+export const ListBeatChannelsResponseItem = zod.object({
+  id: zod.number(),
+  youtubeChannelId: zod.string(),
+  name: zod.string(),
+  thumbnailUrl: zod.string().nullish(),
+  addedAt: zod.coerce.date(),
+});
+export const ListBeatChannelsResponse = zod.array(ListBeatChannelsResponseItem);
+
+/**
+ * @summary Add a beat channel
+ */
+export const AddBeatChannelBody = zod.object({
+  youtubeChannelId: zod
+    .string()
+    .describe("YouTube channel ID (starts with UC...) or handle (@username)"),
+});
+
+/**
+ * @summary Search YouTube channels for beat producers
+ */
+export const SearchBeatChannelsQueryParams = zod.object({
+  q: zod.coerce.string(),
+});
+
+export const SearchBeatChannelsResponseItem = zod.object({
+  youtubeChannelId: zod.string(),
+  name: zod.string(),
+  description: zod.string(),
+  thumbnailUrl: zod.string().nullish(),
+  subscriberCount: zod.string().nullish(),
+});
+export const SearchBeatChannelsResponse = zod.array(
+  SearchBeatChannelsResponseItem,
+);
+
+/**
+ * @summary Remove a beat channel
+ */
+export const RemoveBeatChannelParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List recent beats from beat channels
+ */
+export const ListBeatsQueryParams = zod.object({
+  channelId: zod.coerce.number().optional(),
+});
+
+export const ListBeatsResponseItem = zod.object({
+  videoId: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  thumbnailUrl: zod.string(),
+  publishedAt: zod.coerce.date(),
+  viewCount: zod.string().nullish(),
+  channelId: zod.string(),
+  channelName: zod.string(),
+  channelThumbnailUrl: zod.string().nullish(),
+  duration: zod.string().nullish(),
+});
+export const ListBeatsResponse = zod.array(ListBeatsResponseItem);
+
+/**
+ * @summary Get similar beats for a given video
+ */
+export const GetSimilarBeatsParams = zod.object({
+  videoId: zod.coerce.string(),
+});
+
+export const GetSimilarBeatsQueryParams = zod.object({
+  title: zod.coerce.string(),
+});
+
+export const GetSimilarBeatsResponseItem = zod.object({
+  videoId: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  thumbnailUrl: zod.string(),
+  publishedAt: zod.coerce.date(),
+  viewCount: zod.string().nullish(),
+  channelId: zod.string(),
+  channelName: zod.string(),
+  channelThumbnailUrl: zod.string().nullish(),
+  duration: zod.string().nullish(),
+});
+export const GetSimilarBeatsResponse = zod.array(GetSimilarBeatsResponseItem);
+
+/**
  * @summary Generate AI summary for a video
  */
 export const GetVideoSummaryBody = zod.object({

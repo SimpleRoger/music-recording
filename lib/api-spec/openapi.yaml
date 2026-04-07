@@ -15,6 +15,8 @@ tags:
     description: YouTube videos from favourite channels
   - name: ai
     description: AI-powered features
+  - name: beats
+    description: Beat channels and beat videos
 paths:
   /healthz:
     get:
@@ -146,6 +148,134 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /beat-channels:
+    get:
+      operationId: listBeatChannels
+      tags: [beats]
+      summary: List beat channels
+      responses:
+        "200":
+          description: List of beat channels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Channel"
+    post:
+      operationId: addBeatChannel
+      tags: [beats]
+      summary: Add a beat channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddChannelRequest"
+      responses:
+        "201":
+          description: Beat channel added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Channel"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /beat-channels/search:
+    get:
+      operationId: searchBeatChannels
+      tags: [beats]
+      summary: Search YouTube channels for beat producers
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChannelSearchResult"
+  /beat-channels/{id}:
+    delete:
+      operationId: removeBeatChannel
+      tags: [beats]
+      summary: Remove a beat channel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Beat channel removed
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /beats:
+    get:
+      operationId: listBeats
+      tags: [beats]
+      summary: List recent beats from beat channels
+      parameters:
+        - name: channelId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of beats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Video"
+        "500":
+          description: API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /beats/{videoId}/similar:
+    get:
+      operationId: getSimilarBeats
+      tags: [beats]
+      summary: Get similar beats for a given video
+      parameters:
+        - name: videoId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: title
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Similar beats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Video"
   /videos/summary:
     post:
       operationId: getVideoSummary

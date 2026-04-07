@@ -21,8 +21,11 @@ import type {
   Channel,
   ChannelSearchResult,
   ErrorResponse,
+  GetSimilarBeatsParams,
   HealthStatus,
+  ListBeatsParams,
   ListVideosParams,
+  SearchBeatChannelsParams,
   SearchChannelsParams,
   Video,
   VideoSummaryRequest,
@@ -539,6 +542,554 @@ export function useListVideos<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListVideosQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List beat channels
+ */
+export const getListBeatChannelsUrl = () => {
+  return `/api/beat-channels`;
+};
+
+export const listBeatChannels = async (
+  options?: RequestInit,
+): Promise<Channel[]> => {
+  return customFetch<Channel[]>(getListBeatChannelsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBeatChannelsQueryKey = () => {
+  return [`/api/beat-channels`] as const;
+};
+
+export const getListBeatChannelsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBeatChannels>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listBeatChannels>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListBeatChannelsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listBeatChannels>>
+  > = ({ signal }) => listBeatChannels({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBeatChannels>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBeatChannelsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBeatChannels>>
+>;
+export type ListBeatChannelsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List beat channels
+ */
+
+export function useListBeatChannels<
+  TData = Awaited<ReturnType<typeof listBeatChannels>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listBeatChannels>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBeatChannelsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a beat channel
+ */
+export const getAddBeatChannelUrl = () => {
+  return `/api/beat-channels`;
+};
+
+export const addBeatChannel = async (
+  addChannelRequest: AddChannelRequest,
+  options?: RequestInit,
+): Promise<Channel> => {
+  return customFetch<Channel>(getAddBeatChannelUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addChannelRequest),
+  });
+};
+
+export const getAddBeatChannelMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addBeatChannel>>,
+    TError,
+    { data: BodyType<AddChannelRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addBeatChannel>>,
+  TError,
+  { data: BodyType<AddChannelRequest> },
+  TContext
+> => {
+  const mutationKey = ["addBeatChannel"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addBeatChannel>>,
+    { data: BodyType<AddChannelRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return addBeatChannel(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddBeatChannelMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addBeatChannel>>
+>;
+export type AddBeatChannelMutationBody = BodyType<AddChannelRequest>;
+export type AddBeatChannelMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Add a beat channel
+ */
+export const useAddBeatChannel = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addBeatChannel>>,
+    TError,
+    { data: BodyType<AddChannelRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addBeatChannel>>,
+  TError,
+  { data: BodyType<AddChannelRequest> },
+  TContext
+> => {
+  return useMutation(getAddBeatChannelMutationOptions(options));
+};
+
+/**
+ * @summary Search YouTube channels for beat producers
+ */
+export const getSearchBeatChannelsUrl = (params: SearchBeatChannelsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/beat-channels/search?${stringifiedParams}`
+    : `/api/beat-channels/search`;
+};
+
+export const searchBeatChannels = async (
+  params: SearchBeatChannelsParams,
+  options?: RequestInit,
+): Promise<ChannelSearchResult[]> => {
+  return customFetch<ChannelSearchResult[]>(getSearchBeatChannelsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getSearchBeatChannelsQueryKey = (
+  params?: SearchBeatChannelsParams,
+) => {
+  return [`/api/beat-channels/search`, ...(params ? [params] : [])] as const;
+};
+
+export const getSearchBeatChannelsQueryOptions = <
+  TData = Awaited<ReturnType<typeof searchBeatChannels>>,
+  TError = ErrorType<unknown>,
+>(
+  params: SearchBeatChannelsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchBeatChannels>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getSearchBeatChannelsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof searchBeatChannels>>
+  > = ({ signal }) => searchBeatChannels(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof searchBeatChannels>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SearchBeatChannelsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof searchBeatChannels>>
+>;
+export type SearchBeatChannelsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Search YouTube channels for beat producers
+ */
+
+export function useSearchBeatChannels<
+  TData = Awaited<ReturnType<typeof searchBeatChannels>>,
+  TError = ErrorType<unknown>,
+>(
+  params: SearchBeatChannelsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchBeatChannels>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSearchBeatChannelsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Remove a beat channel
+ */
+export const getRemoveBeatChannelUrl = (id: number) => {
+  return `/api/beat-channels/${id}`;
+};
+
+export const removeBeatChannel = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getRemoveBeatChannelUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getRemoveBeatChannelMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeBeatChannel>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeBeatChannel>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["removeBeatChannel"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeBeatChannel>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return removeBeatChannel(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveBeatChannelMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeBeatChannel>>
+>;
+
+export type RemoveBeatChannelMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Remove a beat channel
+ */
+export const useRemoveBeatChannel = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeBeatChannel>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeBeatChannel>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getRemoveBeatChannelMutationOptions(options));
+};
+
+/**
+ * @summary List recent beats from beat channels
+ */
+export const getListBeatsUrl = (params?: ListBeatsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/beats?${stringifiedParams}`
+    : `/api/beats`;
+};
+
+export const listBeats = async (
+  params?: ListBeatsParams,
+  options?: RequestInit,
+): Promise<Video[]> => {
+  return customFetch<Video[]>(getListBeatsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBeatsQueryKey = (params?: ListBeatsParams) => {
+  return [`/api/beats`, ...(params ? [params] : [])] as const;
+};
+
+export const getListBeatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBeats>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params?: ListBeatsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBeats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListBeatsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listBeats>>> = ({
+    signal,
+  }) => listBeats(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBeats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBeatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBeats>>
+>;
+export type ListBeatsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary List recent beats from beat channels
+ */
+
+export function useListBeats<
+  TData = Awaited<ReturnType<typeof listBeats>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params?: ListBeatsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBeats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBeatsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get similar beats for a given video
+ */
+export const getGetSimilarBeatsUrl = (
+  videoId: string,
+  params: GetSimilarBeatsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/beats/${videoId}/similar?${stringifiedParams}`
+    : `/api/beats/${videoId}/similar`;
+};
+
+export const getSimilarBeats = async (
+  videoId: string,
+  params: GetSimilarBeatsParams,
+  options?: RequestInit,
+): Promise<Video[]> => {
+  return customFetch<Video[]>(getGetSimilarBeatsUrl(videoId, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSimilarBeatsQueryKey = (
+  videoId: string,
+  params?: GetSimilarBeatsParams,
+) => {
+  return [
+    `/api/beats/${videoId}/similar`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetSimilarBeatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSimilarBeats>>,
+  TError = ErrorType<unknown>,
+>(
+  videoId: string,
+  params: GetSimilarBeatsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSimilarBeats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetSimilarBeatsQueryKey(videoId, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSimilarBeats>>> = ({
+    signal,
+  }) => getSimilarBeats(videoId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!videoId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSimilarBeats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSimilarBeatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSimilarBeats>>
+>;
+export type GetSimilarBeatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get similar beats for a given video
+ */
+
+export function useGetSimilarBeats<
+  TData = Awaited<ReturnType<typeof getSimilarBeats>>,
+  TError = ErrorType<unknown>,
+>(
+  videoId: string,
+  params: GetSimilarBeatsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSimilarBeats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSimilarBeatsQueryOptions(videoId, params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
