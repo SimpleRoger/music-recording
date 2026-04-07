@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   X, ChevronDown, ChevronUp, ExternalLink, Music2,
   Sparkles, Loader2, FileText, Download, CheckCircle2,
+  Mic, Square, Trash2,
 } from "lucide-react";
 import type { Video } from "@workspace/api-client-react";
 import { formatDuration } from "../lib/utils";
@@ -19,12 +20,27 @@ interface BeatPlayerProps {
 }
 
 type DownloadState = "idle" | "downloading" | "done";
+type RecordState = "idle" | "requesting" | "recording" | "done";
+
+function formatSeconds(s: number) {
+  return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
+}
 
 export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   const isOpen = beat !== null;
   const [videoExpanded, setVideoExpanded] = useState(false);
   const [lyrics, setLyrics] = useState("");
   const [downloadState, setDownloadState] = useState<DownloadState>("idle");
+
+  // Recording
+  const [recordState, setRecordState] = useState<RecordState>("idle");
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
+  const [recordMime, setRecordMime] = useState("audio/webm");
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const lyricsRef = useRef<HTMLTextAreaElement>(null);
   const downloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -34,16 +50,26 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     isOpen
   );
 
-  // Load saved lyrics when beat changes
+  // Load saved lyrics when beat changes; also stop/discard any recording
   useEffect(() => {
     if (beat) {
       const saved = localStorage.getItem(LYRICS_KEY(beat.videoId)) ?? "";
       setLyrics(saved);
       setVideoExpanded(false);
+      // Stop in-flight recording if beat changes
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+      if (recordingUrl) URL.revokeObjectURL(recordingUrl);
+      setRecordingUrl(null);
+      setRecordState("idle");
+      setRecordSeconds(0);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beat?.videoId]);
 
-  // Save beat metadata whenever beat changes (so Lyrics page can display it)
+  // Save beat metadata so Lyrics page can display it
   useEffect(() => {
     if (!beat) return;
     localStorage.setItem(BEAT_META_KEY(beat.videoId), JSON.stringify({
@@ -54,7 +80,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     }));
   }, [beat?.videoId]);
 
-  // Save lyrics on change (debounced via useEffect)
+  // Debounced lyrics save
   useEffect(() => {
     if (!beat) return;
     const timer = setTimeout(() => {
@@ -77,6 +103,16 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     return () => { document.body.style.overflow = ""; };
   }, [isOpen]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+      if (downloadTimerRef.current) clearTimeout(downloadTimerRef.current);
+      if (recordingUrl) URL.revokeObjectURL(recordingUrl);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSimilarClick = useCallback((similar: Video) => {
     onBeatSelect(similar);
   }, [onBeatSelect]);
@@ -84,7 +120,6 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   const handleDownload = useCallback(() => {
     if (!beat || downloadState === "downloading") return;
     setDownloadState("downloading");
-
     const url = `/api/beats/${beat.videoId}/download?title=${encodeURIComponent(beat.title)}`;
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -92,14 +127,73 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
-
-    // Show "done" after a short delay (download has been handed off to browser)
     if (downloadTimerRef.current) clearTimeout(downloadTimerRef.current);
     downloadTimerRef.current = setTimeout(() => {
       setDownloadState("done");
       downloadTimerRef.current = setTimeout(() => setDownloadState("idle"), 3000);
     }, 2000);
   }, [beat, downloadState]);
+
+  const startRecording = useCallback(async () => {
+    if (recordState !== "idle") return;
+    setRecordState("requesting");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : "audio/mp4";
+      setRecordMime(mime);
+      const mr = new MediaRecorder(stream, { mimeType: mime });
+      mediaRecorderRef.current = mr;
+      chunksRef.current = [];
+
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      mr.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: mime });
+        const url = URL.createObjectURL(blob);
+        setRecordingUrl(url);
+        setRecordState("done");
+        stream.getTracks().forEach((t) => t.stop());
+        if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+      };
+
+      mr.start(250);
+      setRecordState("recording");
+      setRecordSeconds(0);
+      recordTimerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000);
+    } catch {
+      setRecordState("idle");
+    }
+  }, [recordState]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+  }, []);
+
+  const discardRecording = useCallback(() => {
+    if (recordingUrl) URL.revokeObjectURL(recordingUrl);
+    setRecordingUrl(null);
+    setRecordState("idle");
+    setRecordSeconds(0);
+  }, [recordingUrl]);
+
+  const downloadFreestyle = useCallback(() => {
+    if (!recordingUrl || !beat) return;
+    const ext = recordMime.includes("mp4") ? "m4a" : "webm";
+    const anchor = document.createElement("a");
+    anchor.href = recordingUrl;
+    anchor.download = `${beat.title} - freestyle.${ext}`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+  }, [recordingUrl, beat, recordMime]);
 
   if (!beat) return null;
 
@@ -148,26 +242,95 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                       <p className="text-xs text-text-muted truncate">{beat.channelName}</p>
                       {duration && <span className="text-xs text-text-muted shrink-0">· {duration}</span>}
                     </div>
-                    {/* Download button */}
-                    <button
-                      onClick={handleDownload}
-                      disabled={downloadState === "downloading"}
-                      className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
-                        downloadState === "done"
-                          ? "bg-green-500/10 text-green-400 border-green-500/20"
-                          : downloadState === "downloading"
-                          ? "bg-surface text-text-muted border-border cursor-not-allowed"
-                          : "bg-surface hover:bg-surface-hover text-text-muted hover:text-text-main border-border hover:border-primary/30"
-                      }`}
-                    >
-                      {downloadState === "downloading" ? (
-                        <><Loader2 className="w-3.5 h-3.5 animate-spin" />Preparing…</>
-                      ) : downloadState === "done" ? (
-                        <><CheckCircle2 className="w-3.5 h-3.5" />Downloaded!</>
-                      ) : (
-                        <><Download className="w-3.5 h-3.5" />Download MP3</>
+
+                    {/* Action buttons row */}
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {/* Download beat */}
+                      <button
+                        onClick={handleDownload}
+                        disabled={downloadState === "downloading"}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                          downloadState === "done"
+                            ? "bg-green-500/10 text-green-400 border-green-500/20"
+                            : downloadState === "downloading"
+                            ? "bg-surface text-text-muted border-border cursor-not-allowed"
+                            : "bg-surface hover:bg-surface-hover text-text-muted hover:text-text-main border-border hover:border-primary/30"
+                        }`}
+                      >
+                        {downloadState === "downloading" ? (
+                          <><Loader2 className="w-3.5 h-3.5 animate-spin" />Preparing…</>
+                        ) : downloadState === "done" ? (
+                          <><CheckCircle2 className="w-3.5 h-3.5" />Downloaded!</>
+                        ) : (
+                          <><Download className="w-3.5 h-3.5" />Download MP3</>
+                        )}
+                      </button>
+
+                      {/* Record button */}
+                      {recordState === "idle" || recordState === "requesting" ? (
+                        <button
+                          onClick={startRecording}
+                          disabled={recordState === "requesting"}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border bg-surface hover:bg-red-500/10 text-text-muted hover:text-red-400 border-border hover:border-red-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {recordState === "requesting" ? (
+                            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Waiting…</>
+                          ) : (
+                            <><Mic className="w-3.5 h-3.5" />Record</>
+                          )}
+                        </button>
+                      ) : recordState === "recording" ? (
+                        <button
+                          onClick={stopRecording}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20 transition-all"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                          {formatSeconds(recordSeconds)}
+                          <Square className="w-3 h-3 ml-0.5" />
+                        </button>
+                      ) : null}
+                    </div>
+
+                    {/* Recorded playback widget */}
+                    <AnimatePresence>
+                      {recordState === "done" && recordingUrl && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="mt-2.5 p-2.5 rounded-xl bg-red-500/5 border border-red-500/15 flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">Freestyle · {formatSeconds(recordSeconds)}</span>
+                            </div>
+                            <audio
+                              src={recordingUrl}
+                              controls
+                              className="w-full h-8"
+                              style={{ accentColor: "#ef4444" }}
+                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={downloadFreestyle}
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
+                              >
+                                <Download className="w-3 h-3" />
+                                Save recording
+                              </button>
+                              <button
+                                onClick={discardRecording}
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-text-muted hover:text-red-400 border border-border hover:border-red-500/20 transition-all"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                Discard
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
                       )}
-                    </button>
+                    </AnimatePresence>
                   </div>
                 </div>
 
@@ -180,8 +343,6 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                   {videoExpanded ? "Hide video" : "Show video"}
                 </button>
 
-                {/* iframe is ALWAYS in the DOM so autoplay fires immediately on open.
-                    Height animates to show/hide visually — audio keeps playing either way. */}
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: videoExpanded ? "auto" : 0, opacity: videoExpanded ? 1 : 0 }}
