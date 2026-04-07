@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { Link } from "wouter";
-import { Plus, Music2, AlertCircle, RefreshCw, Tv2 } from "lucide-react";
+import { Plus, Music2, AlertCircle, RefreshCw, Tv2, FileText } from "lucide-react";
 import { motion } from "framer-motion";
 import { useBeats } from "../hooks/use-beats";
 import { useBeatChannels, useRemoveBeatChannel } from "../hooks/use-beat-channels";
@@ -48,6 +48,11 @@ export default function Beats() {
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-semibold bg-primary/15 text-primary border border-primary/20">
               <Music2 className="w-3.5 h-3.5" />Beats
             </span>
+            <Link href="/lyrics">
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
+                <FileText className="w-3.5 h-3.5" />Lyrics
+              </span>
+            </Link>
           </nav>
         </div>
       </header>

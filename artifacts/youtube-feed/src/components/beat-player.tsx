@@ -10,6 +10,7 @@ import { useSimilarBeats } from "../hooks/use-beats";
 import { BeatCard } from "./beat-card";
 
 const LYRICS_KEY = (videoId: string) => `tubefeed-lyrics-${videoId}`;
+const BEAT_META_KEY = (videoId: string) => `tubefeed-beat-meta-${videoId}`;
 
 interface BeatPlayerProps {
   beat: Video | null;
@@ -38,11 +39,23 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     }
   }, [beat?.videoId]);
 
+  // Save beat metadata whenever beat changes (so Lyrics page can display it)
+  useEffect(() => {
+    if (!beat) return;
+    localStorage.setItem(BEAT_META_KEY(beat.videoId), JSON.stringify({
+      videoId: beat.videoId,
+      title: beat.title,
+      channelName: beat.channelName,
+      thumbnailUrl: beat.thumbnailUrl,
+    }));
+  }, [beat?.videoId]);
+
   // Save lyrics on change (debounced via useEffect)
   useEffect(() => {
     if (!beat) return;
     const timer = setTimeout(() => {
       localStorage.setItem(LYRICS_KEY(beat.videoId), lyrics);
+      localStorage.setItem(`tubefeed-beat-time-${beat.videoId}`, Date.now().toString());
     }, 500);
     return () => clearTimeout(timer);
   }, [lyrics, beat?.videoId]);
