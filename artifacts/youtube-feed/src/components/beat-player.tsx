@@ -48,6 +48,12 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   const lyricsRef = useRef<HTMLTextAreaElement>(null);
   const downloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Mic visualizer
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+  const vizCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
   const { data: similarBeats, isLoading: similarLoading } = useSimilarBeats(
     beat?.videoId ?? "",
     beat?.title ?? "",
@@ -55,17 +61,82 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   );
   const uploadRecording = useUploadRecording();
 
+  const stopVisualizer = useCallback(() => {
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    animFrameRef.current = null;
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    analyserRef.current = null;
+    const canvas = vizCanvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }, []);
+
+  const drawVisualizer = useCallback(() => {
+    const canvas = vizCanvasRef.current;
+    const analyser = analyserRef.current;
+    if (!canvas || !analyser) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const bufferLen = analyser.frequencyBinCount;
+    const dataArr = new Uint8Array(bufferLen);
+    analyser.getByteFrequencyData(dataArr);
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const barCount = 40;
+    const gap = 2;
+    const barW = (W - gap * (barCount - 1)) / barCount;
+
+    ctx.clearRect(0, 0, W, H);
+
+    const step = Math.floor(bufferLen / barCount);
+    for (let i = 0; i < barCount; i++) {
+      const val = dataArr[i * step] / 255; // 0..1
+      const barH = Math.max(3, val * H);
+      const x = i * (barW + gap);
+      const y = H - barH;
+
+      // Green → yellow → red gradient based on level
+      const r = Math.round(val < 0.5 ? val * 2 * 200 : 200 + (val - 0.5) * 2 * 55);
+      const g = Math.round(val < 0.5 ? 200 : (1 - (val - 0.5) * 2) * 200);
+      ctx.fillStyle = `rgb(${r},${g},30)`;
+      ctx.beginPath();
+      ctx.roundRect(x, y, barW, barH, 2);
+      ctx.fill();
+    }
+
+    animFrameRef.current = requestAnimationFrame(drawVisualizer);
+  }, []);
+
   const resetRecording = useCallback((revokeUrl = true) => {
     if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
     if (revokeUrl && recordingUrl) URL.revokeObjectURL(recordingUrl);
+    stopVisualizer();
     recordingBlobRef.current = null;
     setRecordingUrl(null);
     setRecordState("idle");
     setRecordSeconds(0);
     setCloudSaveState("idle");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recordingUrl]);
+  }, [recordingUrl, stopVisualizer]);
+
+  // Start/stop the visualizer draw loop when recording state changes
+  useEffect(() => {
+    if (recordState === "recording" && analyserRef.current) {
+      // Canvas is now mounted — kick off the animation loop
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      drawVisualizer();
+    }
+    // When recording stops, stopVisualizer is called inside mr.onstop
+  }, [recordState, drawVisualizer]);
 
   // Reset recording & lyrics when beat changes
   useEffect(() => {
@@ -169,7 +240,22 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
         setRecordState("done");
         stream.getTracks().forEach((t) => t.stop());
         if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+        stopVisualizer();
       };
+
+      // Set up audio visualizer (draw loop starts via useEffect after canvas mounts)
+      try {
+        const ac = new AudioContext();
+        const source = ac.createMediaStreamSource(stream);
+        const analyser = ac.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.7;
+        source.connect(analyser);
+        audioContextRef.current = ac;
+        analyserRef.current = analyser;
+      } catch {
+        // Visualizer is optional — recording still works without it
+      }
 
       mr.start(250);
       setRecordState("recording");
@@ -178,7 +264,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     } catch {
       setRecordState("idle");
     }
-  }, [recordState]);
+  }, [recordState, stopVisualizer]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === "recording") {
@@ -307,12 +393,41 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                           onClick={stopRecording}
                           className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20 transition-all"
                         >
-                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
-                          {formatSeconds(recordSeconds)}
-                          <Square className="w-3 h-3 ml-0.5" />
+                          <Square className="w-3 h-3" />
+                          Stop
                         </button>
                       )}
                     </div>
+
+                    {/* Live mic visualizer — shows while recording */}
+                    <AnimatePresence>
+                      {recordState === "recording" && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.18 }}
+                          className="overflow-hidden w-full mt-2"
+                        >
+                          <div className="w-full p-2.5 rounded-xl bg-red-500/5 border border-red-500/20 flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">Recording · {formatSeconds(recordSeconds)}</span>
+                              </div>
+                              <span className="text-[10px] text-text-muted">Mic input</span>
+                            </div>
+                            <canvas
+                              ref={vizCanvasRef}
+                              width={400}
+                              height={36}
+                              className="w-full rounded-lg"
+                              style={{ background: "rgba(0,0,0,0.3)" }}
+                            />
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     {/* Recorded playback widget */}
                     <AnimatePresence>
