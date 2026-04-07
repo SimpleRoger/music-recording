@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, ChevronDown, ChevronUp, ExternalLink, Music2,
-  Sparkles, Loader2, FileText,
+  Sparkles, Loader2, FileText, Download, CheckCircle2,
 } from "lucide-react";
 import type { Video } from "@workspace/api-client-react";
 import { formatDuration } from "../lib/utils";
@@ -18,11 +18,15 @@ interface BeatPlayerProps {
   onBeatSelect: (beat: Video) => void;
 }
 
+type DownloadState = "idle" | "downloading" | "done";
+
 export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   const isOpen = beat !== null;
   const [videoExpanded, setVideoExpanded] = useState(false);
   const [lyrics, setLyrics] = useState("");
+  const [downloadState, setDownloadState] = useState<DownloadState>("idle");
   const lyricsRef = useRef<HTMLTextAreaElement>(null);
+  const downloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: similarBeats, isLoading: similarLoading } = useSimilarBeats(
     beat?.videoId ?? "",
@@ -77,6 +81,26 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     onBeatSelect(similar);
   }, [onBeatSelect]);
 
+  const handleDownload = useCallback(() => {
+    if (!beat || downloadState === "downloading") return;
+    setDownloadState("downloading");
+
+    const url = `/api/beats/${beat.videoId}/download?title=${encodeURIComponent(beat.title)}`;
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${beat.title}.mp3`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+
+    // Show "done" after a short delay (download has been handed off to browser)
+    if (downloadTimerRef.current) clearTimeout(downloadTimerRef.current);
+    downloadTimerRef.current = setTimeout(() => {
+      setDownloadState("done");
+      downloadTimerRef.current = setTimeout(() => setDownloadState("idle"), 3000);
+    }, 2000);
+  }, [beat, downloadState]);
+
   if (!beat) return null;
 
   const duration = formatDuration(beat.duration);
@@ -124,6 +148,26 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                       <p className="text-xs text-text-muted truncate">{beat.channelName}</p>
                       {duration && <span className="text-xs text-text-muted shrink-0">· {duration}</span>}
                     </div>
+                    {/* Download button */}
+                    <button
+                      onClick={handleDownload}
+                      disabled={downloadState === "downloading"}
+                      className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                        downloadState === "done"
+                          ? "bg-green-500/10 text-green-400 border-green-500/20"
+                          : downloadState === "downloading"
+                          ? "bg-surface text-text-muted border-border cursor-not-allowed"
+                          : "bg-surface hover:bg-surface-hover text-text-muted hover:text-text-main border-border hover:border-primary/30"
+                      }`}
+                    >
+                      {downloadState === "downloading" ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" />Preparing…</>
+                      ) : downloadState === "done" ? (
+                        <><CheckCircle2 className="w-3.5 h-3.5" />Downloaded!</>
+                      ) : (
+                        <><Download className="w-3.5 h-3.5" />Download MP3</>
+                      )}
+                    </button>
                   </div>
                 </div>
 
