@@ -246,11 +246,20 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
       // Set up audio visualizer (draw loop starts via useEffect after canvas mounts)
       try {
         const ac = new AudioContext();
+        // Browsers suspend AudioContext by default — must resume before audio flows
+        if (ac.state === "suspended") await ac.resume();
         const source = ac.createMediaStreamSource(stream);
         const analyser = ac.createAnalyser();
-        analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.7;
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.6;
+        analyser.minDecibels = -90;
+        analyser.maxDecibels = -10;
         source.connect(analyser);
+        // Connect to a silent gain node so the audio graph stays active in all browsers
+        const silent = ac.createGain();
+        silent.gain.value = 0;
+        analyser.connect(silent);
+        silent.connect(ac.destination);
         audioContextRef.current = ac;
         analyserRef.current = analyser;
       } catch {
