@@ -111,10 +111,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   const drawVisualizer = useCallback(() => {
     const canvas = vizCanvasRef.current;
     const analyser = analyserRef.current;
-    if (!canvas || !analyser) {
-      console.error("[viz] missing:", { canvas: !!canvas, analyser: !!analyser });
-      return;
-    }
+    if (!canvas || !analyser) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -126,13 +123,6 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     const tdLen = analyser.fftSize;
     const td = new Uint8Array(tdLen);
     analyser.getByteTimeDomainData(td);
-
-    // Log the first 5 frames so we can see if data flows
-    vizFrameCount.current += 1;
-    if (vizFrameCount.current <= 5) {
-      const acState = audioContextRef.current?.state ?? "no ctx";
-      console.error(`[viz] frame ${vizFrameCount.current} | ac=${acState} | td[0..4]=${Array.from(td.slice(0,5)).join(",")} | fftSize=${tdLen}`);
-    }
 
     // Compute peak amplitude (0..1) — non-zero whenever mic has any signal
     let peak = 0;
