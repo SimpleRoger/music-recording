@@ -15,6 +15,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AddChannelModal } from "@/components/AddChannelModal";
 import { EmptyState } from "@/components/EmptyState";
 import { VideoCard } from "@/components/VideoCard";
+import { VideoPlayerModal } from "@/components/VideoPlayerModal";
+import type { Video } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import {
   getListChannelsQueryKey,
@@ -34,6 +36,7 @@ export default function FeedScreen() {
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [managingChannels, setManagingChannels] = useState(false);
+  const [playerVideo, setPlayerVideo] = useState<Video | null>(null);
 
   const { data: channels = [] } = useListChannels();
   const { data: videos = [], isLoading, refetch } = useListVideos({
@@ -173,7 +176,7 @@ export default function FeedScreen() {
         <FlatList
           data={videos}
           keyExtractor={(v) => v.videoId}
-          renderItem={({ item }) => <VideoCard video={item} />}
+          renderItem={({ item }) => <VideoCard video={item} onPress={setPlayerVideo} />}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingTop: 12, paddingBottom: (Platform.OS === "web" ? 34 : insets.bottom) + 90 }}
           refreshControl={
@@ -192,6 +195,7 @@ export default function FeedScreen() {
         type="channel"
         existingChannels={channels}
       />
+      <VideoPlayerModal video={playerVideo} onClose={() => setPlayerVideo(null)} />
     </View>
   );
 }

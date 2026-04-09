@@ -1,6 +1,5 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import * as WebBrowser from "expo-web-browser";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
@@ -39,16 +38,17 @@ function formatViews(views?: string | null): string {
 
 interface VideoCardProps {
   video: Video;
+  onPress?: (video: Video) => void;
 }
 
-export function VideoCard({ video }: VideoCardProps) {
+export function VideoCard({ video, onPress }: VideoCardProps) {
   const colors = useColors();
   const duration = parseDuration(video.duration);
   const views = formatViews(video.viewCount);
   const ago = timeAgo(video.publishedAt);
 
   const handlePress = () => {
-    WebBrowser.openBrowserAsync(`https://www.youtube.com/watch?v=${video.videoId}`);
+    onPress?.(video);
   };
 
   return (

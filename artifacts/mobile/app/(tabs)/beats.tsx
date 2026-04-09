@@ -16,6 +16,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AddChannelModal } from "@/components/AddChannelModal";
 import { EmptyState } from "@/components/EmptyState";
 import { VideoCard } from "@/components/VideoCard";
+import { VideoPlayerModal } from "@/components/VideoPlayerModal";
+import type { Video } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import {
   getListBeatChannelsQueryKey,
@@ -39,6 +41,7 @@ export default function BeatsScreen() {
   const [activeSearch, setActiveSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [mode, setMode] = useState<"channels" | "search">("channels");
+  const [playerVideo, setPlayerVideo] = useState<Video | null>(null);
 
   const { data: beatChannels = [] } = useListBeatChannels();
   const { data: beats = [], isLoading: isLoadingBeats, refetch: refetchBeats } = useListBeats({
@@ -196,7 +199,7 @@ export default function BeatsScreen() {
         <FlatList
           data={displayVideos}
           keyExtractor={(v) => v.videoId}
-          renderItem={({ item }) => <VideoCard video={item} />}
+          renderItem={({ item }) => <VideoCard video={item} onPress={setPlayerVideo} />}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingTop: 12, paddingBottom: (Platform.OS === "web" ? 34 : insets.bottom) + 90 }}
           refreshControl={
@@ -213,6 +216,7 @@ export default function BeatsScreen() {
         type="beat"
         existingChannels={beatChannels}
       />
+      <VideoPlayerModal video={playerVideo} onClose={() => setPlayerVideo(null)} />
     </View>
   );
 }
