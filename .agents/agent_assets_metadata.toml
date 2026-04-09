@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "DW1hvQ_Z6CDLnjiG1CZqh"
+uri = "file://artifacts/mobile/assets/images/icon.png"
+type = "image"
+title = "tubefeed mobile icon"
