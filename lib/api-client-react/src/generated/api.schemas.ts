@@ -101,6 +101,10 @@ export type ListVideosParams = {
    * Filter by specific channel DB id
    */
   channelId?: number;
+  /**
+   * Sort order: recent (last 3 months by date) or popular (all-time by view count)
+   */
+  order?: "recent" | "popular";
 };
 
 export type SearchBeatChannelsParams = {

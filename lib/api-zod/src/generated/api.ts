@@ -62,11 +62,17 @@ export const RemoveChannelParams = zod.object({
 /**
  * @summary List recent videos from favourite channels
  */
+export const listVideosQueryOrderDefault = `recent`;
+
 export const ListVideosQueryParams = zod.object({
   channelId: zod.coerce
     .number()
     .optional()
     .describe("Filter by specific channel DB id"),
+  order: zod
+    .enum(["recent", "popular"])
+    .default(listVideosQueryOrderDefault)
+    .describe("Sort order"),
 });
 
 export const ListVideosResponseItem = zod.object({

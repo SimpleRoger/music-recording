@@ -135,6 +135,87 @@ export async function searchChannels(query: string): Promise<YouTubeChannelSearc
   }));
 }
 
+export async function fetchPopularVideos(
+  channelId: string,
+  channelName: string,
+  channelThumbnailUrl: string | null
+): Promise<YouTubeVideo[]> {
+  const apiKey = getApiKey();
+
+  const searchUrl = `${YOUTUBE_API_BASE}/search?part=snippet&channelId=${encodeURIComponent(channelId)}&type=video&order=viewCount&maxResults=25&key=${apiKey}`;
+
+  const searchResp = await fetch(searchUrl);
+  if (!searchResp.ok) {
+    const body = await searchResp.text();
+    logger.error({ status: searchResp.status, body, channelId }, "YouTube popular videos API error");
+    throw new Error(`YouTube API error: ${searchResp.status}`);
+  }
+
+  const searchData = (await searchResp.json()) as {
+    items?: Array<{
+      id: { videoId: string };
+      snippet: {
+        title: string;
+        description: string;
+        publishedAt: string;
+        thumbnails?: {
+          medium?: { url: string };
+          default?: { url: string };
+        };
+      };
+    }>;
+  };
+
+  if (!searchData.items || searchData.items.length === 0) {
+    return [];
+  }
+
+  const videoIds = searchData.items.map((i) => i.id.videoId).join(",");
+
+  const videosUrl = `${YOUTUBE_API_BASE}/videos?part=statistics,contentDetails&id=${encodeURIComponent(videoIds)}&key=${apiKey}`;
+  const videosResp = await fetch(videosUrl);
+
+  let statsMap: Map<string, { viewCount?: string; duration?: string }> = new Map();
+
+  if (videosResp.ok) {
+    const videosData = (await videosResp.json()) as {
+      items?: Array<{
+        id: string;
+        statistics?: { viewCount?: string };
+        contentDetails?: { duration?: string };
+      }>;
+    };
+    for (const item of videosData.items ?? []) {
+      statsMap.set(item.id, {
+        viewCount: item.statistics?.viewCount,
+        duration: item.contentDetails?.duration,
+      });
+    }
+  }
+
+  return searchData.items.map((item) => {
+    const videoId = item.id.videoId;
+    const stats = statsMap.get(videoId) ?? {};
+    const thumbnail =
+      item.snippet.thumbnails?.medium?.url ??
+      item.snippet.thumbnails?.default?.url ??
+      `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+
+    return {
+      videoId,
+      title: item.snippet.title,
+      description: item.snippet.description,
+      thumbnailUrl: thumbnail,
+      publishedAt: new Date(item.snippet.publishedAt),
+      viewCount: stats.viewCount ?? null,
+      channelId,
+      channelName,
+      channelThumbnailUrl,
+      duration: stats.duration ?? null,
+    };
+  });
+}
+
 export async function fetchRecentVideos(
   channelId: string,
   channelName: string,

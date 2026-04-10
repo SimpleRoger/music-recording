@@ -37,10 +37,12 @@ export default function FeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [managingChannels, setManagingChannels] = useState(false);
   const [playerVideo, setPlayerVideo] = useState<Video | null>(null);
+  const [order, setOrder] = useState<"recent" | "popular">("recent");
 
   const { data: channels = [] } = useListChannels();
   const { data: videos = [], isLoading, refetch } = useListVideos({
     channelId: selectedChannelId ?? undefined,
+    order,
   });
 
   const removeChannel = useRemoveChannel({
@@ -82,12 +84,32 @@ export default function FeedScreen() {
         </Text>
         <View style={styles.headerActions}>
           {channels.length > 0 && (
-            <TouchableOpacity
-              style={styles.headerBtn}
-              onPress={() => setManagingChannels((v) => !v)}
-            >
-              <Feather name={managingChannels ? "check" : "settings"} size={20} color={colors.mutedForeground} />
-            </TouchableOpacity>
+            <>
+              <View style={[styles.orderToggle, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                <TouchableOpacity
+                  style={[styles.orderBtn, order === "recent" && { backgroundColor: colors.primary }]}
+                  onPress={() => setOrder("recent")}
+                >
+                  <Text style={[styles.orderBtnText, { color: order === "recent" ? "#fff" : colors.mutedForeground }]}>
+                    Recent
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.orderBtn, order === "popular" && { backgroundColor: colors.primary }]}
+                  onPress={() => setOrder("popular")}
+                >
+                  <Text style={[styles.orderBtnText, { color: order === "popular" ? "#fff" : colors.mutedForeground }]}>
+                    Popular
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={styles.headerBtn}
+                onPress={() => setManagingChannels((v) => !v)}
+              >
+                <Feather name={managingChannels ? "check" : "settings"} size={20} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </>
           )}
           <TouchableOpacity
             style={[styles.addBtn, { backgroundColor: colors.primary }]}
@@ -170,7 +192,11 @@ export default function FeedScreen() {
         </View>
       ) : videos.length === 0 ? (
         <View style={{ flex: 1, paddingBottom: bottomPad }}>
-          <EmptyState icon="video-off" title="No videos" subtitle="No recent videos found for this channel" />
+          <EmptyState
+            icon="video-off"
+            title="No videos"
+            subtitle={order === "popular" ? "No popular videos found for this channel" : "No recent videos found for this channel"}
+          />
         </View>
       ) : (
         <FlatList
@@ -252,5 +278,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_500Medium",
     maxWidth: 120,
+  },
+  orderToggle: {
+    flexDirection: "row",
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  orderBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 16,
+  },
+  orderBtnText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
   },
 });
