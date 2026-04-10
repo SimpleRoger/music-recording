@@ -9,13 +9,43 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import WebView from "react-native-webview";
 import { useColors } from "@/hooks/useColors";
 import type { Video } from "@workspace/api-client-react";
 
 interface VideoPlayerModalProps {
   video: Video | null;
   onClose: () => void;
+}
+
+function YoutubeEmbed({ videoId }: { videoId: string }) {
+  const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0`;
+
+  if (Platform.OS === "web") {
+    return React.createElement("iframe", {
+      src: embedUrl,
+      style: { width: "100%", height: "100%", border: "none" },
+      allow:
+        "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture",
+      allowFullScreen: true,
+    });
+  }
+
+  const WebView = require("react-native-webview").default;
+  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#000;width:100%;height:100%}iframe{width:100%;height:100%;border:none}</style></head><body><iframe src="${embedUrl}" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></body></html>`;
+
+  return (
+    <WebView
+      source={{ html }}
+      style={{ flex: 1, backgroundColor: "#000" }}
+      allowsInlineMediaPlayback
+      mediaPlaybackRequiresUserAction={false}
+      allowsFullscreenVideo
+      javaScriptEnabled
+      domStorageEnabled
+      scrollEnabled={false}
+      bounces={false}
+    />
+  );
 }
 
 export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
@@ -25,71 +55,67 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
   if (!video) return null;
 
   const topPad = Platform.OS === "web" ? 24 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 24 : insets.bottom;
-
-  const embedUrl = `https://www.youtube.com/embed/${video.videoId}?autoplay=1&playsinline=1&rel=0`;
-
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { background: #000; width: 100%; height: 100%; }
-          iframe { width: 100%; height: 100%; border: none; }
-        </style>
-      </head>
-      <body>
-        <iframe
-          src="${embedUrl}"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowfullscreen
-        ></iframe>
-      </body>
-    </html>
-  `;
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: topPad + 10, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+        <View
+          style={[
+            styles.header,
+            {
+              paddingTop: topPad + 10,
+              backgroundColor: colors.card,
+              borderBottomColor: colors.border,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.closeBtn}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
             <Feather name="chevron-down" size={24} color={colors.foreground} />
           </TouchableOpacity>
           <View style={styles.headerInfo}>
-            <Text style={[styles.headerChannel, { color: colors.mutedForeground }]} numberOfLines={1}>
+            <Text
+              style={[styles.headerChannel, { color: colors.mutedForeground }]}
+              numberOfLines={1}
+            >
               {video.channelName}
             </Text>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
+            <Text
+              style={[styles.headerTitle, { color: colors.foreground }]}
+              numberOfLines={1}
+            >
               {video.title}
             </Text>
           </View>
         </View>
 
         <View style={styles.playerContainer}>
-          <WebView
-            source={{ html }}
-            style={styles.webview}
-            allowsInlineMediaPlayback
-            mediaPlaybackRequiresUserAction={false}
-            allowsFullscreenVideo
-            javaScriptEnabled
-            domStorageEnabled
-            scrollEnabled={false}
-            bounces={false}
-          />
+          <YoutubeEmbed videoId={video.videoId} />
         </View>
 
-        <View style={[styles.detailsContainer, { borderTopColor: colors.border }]}>
-          <Text style={[styles.detailsTitle, { color: colors.foreground }]} numberOfLines={3}>
+        <View
+          style={[
+            styles.detailsContainer,
+            { borderTopColor: colors.border },
+          ]}
+        >
+          <Text
+            style={[styles.detailsTitle, { color: colors.foreground }]}
+            numberOfLines={3}
+          >
             {video.title}
           </Text>
           <Text style={[styles.detailsChannel, { color: colors.mutedForeground }]}>
             {video.channelName}
           </Text>
           {video.description ? (
-            <Text style={[styles.detailsDesc, { color: colors.mutedForeground }]} numberOfLines={4}>
+            <Text
+              style={[styles.detailsDesc, { color: colors.mutedForeground }]}
+              numberOfLines={4}
+            >
               {video.description}
             </Text>
           ) : null}
@@ -122,10 +148,6 @@ const styles = StyleSheet.create({
   playerContainer: {
     width: "100%",
     aspectRatio: 16 / 9,
-    backgroundColor: "#000",
-  },
-  webview: {
-    flex: 1,
     backgroundColor: "#000",
   },
   detailsContainer: {
