@@ -214,6 +214,7 @@ router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
         "--no-playlist",
         "--no-warnings",
         "--js-runtimes", `node:${nodeExec}`,
+        "--remote-components", "ejs:github",
         ...(hasCookies ? ["--cookies", COOKIES_FILE] : []),
         `https://www.youtube.com/watch?v=${videoId}`,
       ]);
