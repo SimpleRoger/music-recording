@@ -218,28 +218,39 @@ router.get("/beats/:videoId/similar", async (req, res): Promise<void> => {
   res.json(similar);
 });
 
+// Map audio container extensions to MIME types
+const AUDIO_MIME: Record<string, string> = {
+  m4a: "audio/mp4",
+  webm: "audio/webm",
+  opus: "audio/ogg",
+  ogg: "audio/ogg",
+  mp3: "audio/mpeg",
+  aac: "audio/aac",
+};
+
 router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
   const { videoId } = req.params;
   const rawTitle = typeof req.query.title === "string" ? req.query.title : videoId;
   const safeName = rawTitle.replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim().slice(0, 120) || videoId;
 
-  // yt-dlp cannot post-process (MP3 conversion) when streaming to stdout.
-  // Write to a named temp file so ffmpeg can convert properly, then stream it.
+  // Download the best audio in its native container (no ffmpeg conversion).
+  // yt-dlp names the file with the actual extension, so we use a unique prefix
+  // and then glob for whichever file it created.
   const tmpDir = os.tmpdir();
-  const tmpFile = path.join(tmpDir, `tubefeed-${videoId}-${Date.now()}.mp3`);
+  const tmpBase = path.join(tmpDir, `tubefeed-${videoId}-${Date.now()}`);
+  // yt-dlp template: <tmpBase>.<ext>
+  const tmpTemplate = `${tmpBase}.%(ext)s`;
 
-  const cleanup = () => { try { fs.unlinkSync(tmpFile); } catch (_) {} };
+  const cleanup = (file: string) => { try { fs.unlinkSync(file); } catch (_) {} };
 
   try {
     await new Promise<void>((resolve, reject) => {
-      // Use the Node.js JS runtime so yt-dlp can solve YouTube's JS challenges.
       const nodeExec = process.execPath;
       const hasCookies = fs.existsSync(COOKIES_FILE);
       const ytdlp = spawn(YTDLP, [
-        "-x",
-        "--audio-format", "mp3",
-        "--audio-quality", "0",
-        "-o", tmpFile,
+        // Download best audio in native format — no ffmpeg conversion step.
+        "--format", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
+        "-o", tmpTemplate,
         "--no-playlist",
         "--no-warnings",
         "--js-runtimes", `node:${nodeExec}`,
@@ -252,7 +263,6 @@ router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
       const stderrLines: string[] = [];
       ytdlp.stderr.on("data", (chunk: Buffer) => {
         stderrLines.push(chunk.toString().trim());
-        req.log?.debug(`yt-dlp: ${chunk.toString().trim()}`);
       });
 
       ytdlp.on("error", (err: Error) => reject(err));
@@ -267,23 +277,31 @@ router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
       req.on("close", () => { ytdlp.kill("SIGTERM"); reject(new Error("client disconnected")); });
     });
 
-    if (!fs.existsSync(tmpFile)) {
+    // Find the file yt-dlp wrote (extension is unknown ahead of time)
+    const entries = fs.readdirSync(tmpDir).filter(f => f.startsWith(path.basename(tmpBase)));
+    const outFile = entries.length > 0 ? path.join(tmpDir, entries[0]) : null;
+
+    if (!outFile || !fs.existsSync(outFile)) {
       res.status(500).json({ error: "Download produced no output" });
       return;
     }
 
-    const stat = fs.statSync(tmpFile);
-    res.setHeader("Content-Type", "audio/mpeg");
-    res.setHeader("Content-Disposition", `attachment; filename="${safeName}.mp3"`);
+    const ext = path.extname(outFile).replace(".", "").toLowerCase();
+    const mime = AUDIO_MIME[ext] ?? "application/octet-stream";
+    const dlName = `${safeName}.${ext}`;
+
+    const stat = fs.statSync(outFile);
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Content-Disposition", `attachment; filename="${dlName}"`);
     res.setHeader("Content-Length", stat.size);
     res.setHeader("X-Content-Type-Options", "nosniff");
 
-    const readStream = fs.createReadStream(tmpFile);
+    const readStream = fs.createReadStream(outFile);
     readStream.pipe(res);
-    readStream.on("close", cleanup);
+    readStream.on("close", () => cleanup(outFile));
     readStream.on("error", (err) => {
       req.log?.error({ err }, "stream error after download");
-      cleanup();
+      cleanup(outFile);
       if (!res.writableEnded) res.end();
     });
   } catch (err: unknown) {
