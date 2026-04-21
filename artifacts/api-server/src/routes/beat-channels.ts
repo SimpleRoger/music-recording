@@ -15,6 +15,11 @@ const YTDLP =
   process.env.YTDLP_PATH ??
   path.resolve(__dirname, "../../../.pythonlibs/bin/yt-dlp");
 
+// Optional YouTube cookies file — place youtube-cookies.txt in the workspace root
+// to bypass bot detection on restricted videos.
+const COOKIES_FILE = process.env.YTDLP_COOKIES_PATH ??
+  path.resolve(__dirname, "../../../youtube-cookies.txt");
+
 const router: IRouter = Router();
 
 router.get("/beat-channels/search", async (req, res): Promise<void> => {
@@ -198,6 +203,9 @@ router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
 
   try {
     await new Promise<void>((resolve, reject) => {
+      // Use the Node.js JS runtime so yt-dlp can solve YouTube's JS challenges.
+      const nodeExec = process.execPath;
+      const hasCookies = fs.existsSync(COOKIES_FILE);
       const ytdlp = spawn(YTDLP, [
         "-x",
         "--audio-format", "mp3",
@@ -205,6 +213,8 @@ router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
         "-o", tmpFile,
         "--no-playlist",
         "--no-warnings",
+        "--js-runtimes", `node:${nodeExec}`,
+        ...(hasCookies ? ["--cookies", COOKIES_FILE] : []),
         `https://www.youtube.com/watch?v=${videoId}`,
       ]);
 

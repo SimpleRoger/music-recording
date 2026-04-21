@@ -20,7 +20,7 @@ interface BeatPlayerProps {
   onBeatSelect: (beat: Video) => void;
 }
 
-type DownloadState = "idle" | "downloading" | "done";
+type DownloadState = "idle" | "downloading" | "done" | "error";
 type RecordState = "idle" | "requesting" | "recording" | "done";
 type CloudSaveState = "idle" | "uploading" | "saved" | "error";
 
@@ -33,6 +33,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   const [videoExpanded, setVideoExpanded] = useState(false);
   const [lyrics, setLyrics] = useState("");
   const [downloadState, setDownloadState] = useState<DownloadState>("idle");
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // Mic device selection
   const [micDevices, setMicDevices] = useState<{ deviceId: string; label: string }[]>([]);
@@ -262,21 +263,35 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     onBeatSelect(similar);
   }, [onBeatSelect]);
 
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
     if (!beat || downloadState === "downloading") return;
     setDownloadState("downloading");
-    const url = `/api/beats/${beat.videoId}/download?title=${encodeURIComponent(beat.title)}`;
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${beat.title}.mp3`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
     if (downloadTimerRef.current) clearTimeout(downloadTimerRef.current);
-    downloadTimerRef.current = setTimeout(() => {
+    try {
+      const url = `/api/beats/${beat.videoId}/download?title=${encodeURIComponent(beat.title)}`;
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        let msg = "Download failed";
+        try { const d = await resp.json(); msg = d.error ?? msg; } catch (_) {}
+        throw new Error(msg);
+      }
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = blobUrl;
+      anchor.download = `${beat.title}.mp3`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
       setDownloadState("done");
       downloadTimerRef.current = setTimeout(() => setDownloadState("idle"), 3000);
-    }, 2000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Download failed";
+      setDownloadError(msg);
+      setDownloadState("error");
+      downloadTimerRef.current = setTimeout(() => { setDownloadState("idle"); setDownloadError(null); }, 5000);
+    }
   }, [beat, downloadState]);
 
   const startRecording = useCallback(async () => {
@@ -448,25 +463,41 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <button
-                        onClick={handleDownload}
-                        disabled={downloadState === "downloading"}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
-                          downloadState === "done"
-                            ? "bg-green-500/10 text-green-400 border-green-500/20"
-                            : downloadState === "downloading"
-                            ? "bg-surface text-text-muted border-border cursor-not-allowed"
-                            : "bg-surface hover:bg-surface-hover text-text-muted hover:text-text-main border-border hover:border-primary/30"
-                        }`}
-                      >
-                        {downloadState === "downloading" ? (
-                          <><Loader2 className="w-3.5 h-3.5 animate-spin" />Preparing…</>
-                        ) : downloadState === "done" ? (
-                          <><CheckCircle2 className="w-3.5 h-3.5" />Downloaded!</>
-                        ) : (
-                          <><Download className="w-3.5 h-3.5" />Download MP3</>
+                      <div className="flex flex-col gap-1">
+                        <button
+                          onClick={handleDownload}
+                          disabled={downloadState === "downloading"}
+                          title={downloadState === "error" && downloadError ? downloadError : undefined}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                            downloadState === "done"
+                              ? "bg-green-500/10 text-green-400 border-green-500/20"
+                              : downloadState === "downloading"
+                              ? "bg-surface text-text-muted border-border cursor-not-allowed"
+                              : downloadState === "error"
+                              ? "bg-red-500/10 text-red-400 border-red-500/20"
+                              : "bg-surface hover:bg-surface-hover text-text-muted hover:text-text-main border-border hover:border-primary/30"
+                          }`}
+                        >
+                          {downloadState === "downloading" ? (
+                            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Preparing…</>
+                          ) : downloadState === "done" ? (
+                            <><CheckCircle2 className="w-3.5 h-3.5" />Downloaded!</>
+                          ) : downloadState === "error" ? (
+                            <><Download className="w-3.5 h-3.5" />Try Again</>
+                          ) : (
+                            <><Download className="w-3.5 h-3.5" />Download MP3</>
+                          )}
+                        </button>
+                        {downloadState === "error" && downloadError && (
+                          <p className="text-[10px] text-red-400 leading-tight max-w-[180px]">
+                            {downloadError.includes("bot") || downloadError.includes("Sign in")
+                              ? "YouTube blocked this download. Try another beat."
+                              : downloadError.length > 60
+                              ? downloadError.slice(0, 60) + "…"
+                              : downloadError}
+                          </p>
                         )}
-                      </button>
+                      </div>
 
                       {/* Mic picker + Record button */}
                       {(recordState === "idle" || recordState === "requesting") && (
