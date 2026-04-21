@@ -20,6 +20,35 @@ const YTDLP =
 const COOKIES_FILE = process.env.YTDLP_COOKIES_PATH ??
   path.resolve(__dirname, "../../../youtube-cookies.txt");
 
+// Persistent cache dir so yt-dlp doesn't re-download the EJS challenge solver
+// on every request — it fetches once and reuses the cached script.
+const YTDLP_CACHE_DIR = process.env.YTDLP_CACHE_DIR ??
+  path.resolve(__dirname, "../../../.ytdlp-cache");
+
+// Pre-warm the EJS remote component cache at startup so the first real
+// download isn't slow. Run in background — never blocks the server.
+function warmEjsCache() {
+  const hasCookies = fs.existsSync(COOKIES_FILE);
+  const nodeExec = process.execPath;
+  const args = [
+    "--simulate",
+    "--quiet",
+    "--no-warnings",
+    "--js-runtimes", `node:${nodeExec}`,
+    "--remote-components", "ejs:github",
+    "--cache-dir", YTDLP_CACHE_DIR,
+    ...(hasCookies ? ["--cookies", COOKIES_FILE] : []),
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  ];
+  const p = spawn(YTDLP, args, { stdio: "ignore" });
+  p.on("close", (code) => {
+    if (code === 0) {
+      // ejs script is now cached — subsequent downloads skip the GitHub fetch
+    }
+  });
+}
+warmEjsCache();
+
 const router: IRouter = Router();
 
 router.get("/beat-channels/search", async (req, res): Promise<void> => {
@@ -215,6 +244,7 @@ router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
         "--no-warnings",
         "--js-runtimes", `node:${nodeExec}`,
         "--remote-components", "ejs:github",
+        "--cache-dir", YTDLP_CACHE_DIR,
         ...(hasCookies ? ["--cookies", COOKIES_FILE] : []),
         `https://www.youtube.com/watch?v=${videoId}`,
       ]);
