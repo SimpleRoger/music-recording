@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
 import {
   Tv2, Music2, FileText, Mic, Trash2, Download, Loader2,
-  Cloud, Bookmark, Play, Pause, Volume2, Layers,
+  Cloud, Bookmark, Play, Pause, Volume2, Layers, Sliders,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRecordings, useDeleteRecording } from "../hooks/use-recordings";
@@ -15,7 +15,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-// Ensure YouTube IFrame API script is loaded once
+// Load YouTube IFrame API once across all MixPlayer instances
 let ytApiLoaded = false;
 let ytApiReady = false;
 const ytReadyCallbacks: (() => void)[] = [];
@@ -34,22 +34,66 @@ function loadYTApi(cb: () => void) {
   document.head.appendChild(tag);
 }
 
+// ── Effects presets ───────────────────────────────────────────────────────────
+type EffectPreset = "dry" | "booth" | "punchy" | "warm" | "lofi" | "bright";
+interface PresetDef {
+  label: string;
+  color: string;
+  compressor: { threshold: number; ratio: number; attack: number; release: number; knee: number };
+  highpass: number;
+  lowShelf: { freq: number; gain: number };
+  mid: { freq: number; Q: number; gain: number };
+  highShelf: { freq: number; gain: number };
+  outputGain: number;
+}
+const PRESETS: Record<EffectPreset, PresetDef> = {
+  dry:    { label: "Dry",        color: "text-text-muted border-border",            outputGain: 1,   compressor: { threshold: 0,   ratio: 1,  attack: 0.003, release: 0.25, knee: 40 }, highpass: 20,  lowShelf: { freq: 200,  gain: 0  }, mid: { freq: 2000, Q: 1,   gain: 0  }, highShelf: { freq: 8000,  gain: 0  } },
+  booth:  { label: "Booth",      color: "text-blue-400 border-blue-500/40",         outputGain: 1.1, compressor: { threshold: -18, ratio: 4,  attack: 0.005, release: 0.15, knee: 10 }, highpass: 100, lowShelf: { freq: 200,  gain: -2 }, mid: { freq: 3000, Q: 1.5, gain: 4  }, highShelf: { freq: 10000, gain: 1  } },
+  punchy: { label: "Punchy",     color: "text-orange-400 border-orange-500/40",     outputGain: 1.2, compressor: { threshold: -12, ratio: 8,  attack: 0.001, release: 0.05, knee: 5  }, highpass: 120, lowShelf: { freq: 100,  gain: -3 }, mid: { freq: 5000, Q: 1,   gain: 5  }, highShelf: { freq: 12000, gain: 2  } },
+  warm:   { label: "Warm",       color: "text-amber-400 border-amber-500/40",       outputGain: 1,   compressor: { threshold: -20, ratio: 3,  attack: 0.01,  release: 0.2,  knee: 15 }, highpass: 80,  lowShelf: { freq: 250,  gain: 3  }, mid: { freq: 2000, Q: 0.8, gain: -1 }, highShelf: { freq: 8000,  gain: -2 } },
+  lofi:   { label: "Lo-Fi",      color: "text-purple-400 border-purple-500/40",     outputGain: 1,   compressor: { threshold: -10, ratio: 6,  attack: 0.005, release: 0.1,  knee: 8  }, highpass: 200, lowShelf: { freq: 300,  gain: 2  }, mid: { freq: 1500, Q: 2,   gain: 3  }, highShelf: { freq: 6000,  gain: -8 } },
+  bright: { label: "Bright",     color: "text-cyan-400 border-cyan-500/40",         outputGain: 1.1, compressor: { threshold: -16, ratio: 3,  attack: 0.003, release: 0.2,  knee: 10 }, highpass: 100, lowShelf: { freq: 200,  gain: -1 }, mid: { freq: 4000, Q: 1,   gain: 2  }, highShelf: { freq: 10000, gain: 6  } },
+};
+
 // ── Mix Player ────────────────────────────────────────────────────────────────
 function MixPlayer({ rec }: { rec: RecordingItem }) {
   const ytDivId = `yt-mix-${rec.id}`;
   const ytPlayerRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const timelineRef = useRef<HTMLDivElement | null>(null);
+
+  // Playback state
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(rec.durationSeconds || 0);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const vocalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Mixer
   const [beatVol, setBeatVol] = useState(70);
   const [vocalVol, setVocalVol] = useState(85);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Timeline drag — vocal offset in seconds (positive = vocal starts later)
+  const [vocalOffset, setVocalOffset] = useState(0);
+  const dragStartX = useRef<number | null>(null);
+  const dragStartOffset = useRef(0);
+
+  // Effects
+  const [activePreset, setActivePreset] = useState<EffectPreset>("booth");
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const compRef = useRef<DynamicsCompressorNode | null>(null);
+  const hpRef = useRef<BiquadFilterNode | null>(null);
+  const lsRef = useRef<BiquadFilterNode | null>(null);
+  const midRef = useRef<BiquadFilterNode | null>(null);
+  const hsRef = useRef<BiquadFilterNode | null>(null);
+  const outGainRef = useRef<GainNode | null>(null);
 
   const servingUrl = `/api/storage${rec.objectPath}`;
 
-  // Boot up YT player
+  // Boot YouTube player
   useEffect(() => {
     loadYTApi(() => {
       if (ytPlayerRef.current) return;
@@ -57,62 +101,148 @@ function MixPlayer({ rec }: { rec: RecordingItem }) {
         videoId: rec.beatVideoId,
         playerVars: { autoplay: 0, controls: 0, modestbranding: 1, rel: 0 },
         events: {
-          onReady: () => {
-            ytPlayerRef.current.setVolume(70);
-            setReady(true);
-          },
+          onReady: () => { ytPlayerRef.current.setVolume(beatVol); setReady(true); },
         },
       });
     });
     return () => {
-      if (ytPlayerRef.current) {
-        try { ytPlayerRef.current.destroy(); } catch (_) {}
-        ytPlayerRef.current = null;
-      }
+      if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch (_) {} ytPlayerRef.current = null; }
+      if (audioCtxRef.current) { audioCtxRef.current.close().catch(() => {}); audioCtxRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync beat volume
+  // Build or rebuild the Web Audio chain and apply preset
+  const applyPreset = useCallback((preset: EffectPreset, ctx: AudioContext) => {
+    const p = PRESETS[preset];
+    const comp = compRef.current!;
+    const hp   = hpRef.current!;
+    const ls   = lsRef.current!;
+    const mid  = midRef.current!;
+    const hs   = hsRef.current!;
+    const og   = outGainRef.current!;
+    const gainNode = gainNodeRef.current!;
+
+    comp.threshold.setTargetAtTime(p.compressor.threshold, ctx.currentTime, 0.01);
+    comp.ratio.setTargetAtTime(p.compressor.ratio, ctx.currentTime, 0.01);
+    comp.attack.setTargetAtTime(p.compressor.attack, ctx.currentTime, 0.01);
+    comp.release.setTargetAtTime(p.compressor.release, ctx.currentTime, 0.01);
+    comp.knee.setTargetAtTime(p.compressor.knee, ctx.currentTime, 0.01);
+    hp.frequency.setTargetAtTime(p.highpass, ctx.currentTime, 0.01);
+    ls.frequency.setTargetAtTime(p.lowShelf.freq, ctx.currentTime, 0.01);
+    ls.gain.setTargetAtTime(p.lowShelf.gain, ctx.currentTime, 0.01);
+    mid.frequency.setTargetAtTime(p.mid.freq, ctx.currentTime, 0.01);
+    mid.Q.setTargetAtTime(p.mid.Q, ctx.currentTime, 0.01);
+    mid.gain.setTargetAtTime(p.mid.gain, ctx.currentTime, 0.01);
+    hs.frequency.setTargetAtTime(p.highShelf.freq, ctx.currentTime, 0.01);
+    hs.gain.setTargetAtTime(p.highShelf.gain, ctx.currentTime, 0.01);
+    og.gain.setTargetAtTime(p.outputGain, ctx.currentTime, 0.01);
+    gainNode.gain.setTargetAtTime(vocalVol / 100, ctx.currentTime, 0.01);
+  }, [vocalVol]);
+
+  // Initialise Web Audio chain (lazily, on first play gesture)
+  const ensureAudioChain = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || sourceNodeRef.current) return; // already built
+
+    const ctx = new AudioContext();
+    audioCtxRef.current = ctx;
+
+    const source = ctx.createMediaElementSource(audio);
+    sourceNodeRef.current = source;
+
+    const comp = ctx.createDynamicsCompressor();
+    const hp   = ctx.createBiquadFilter(); hp.type = "highpass";
+    const ls   = ctx.createBiquadFilter(); ls.type = "lowshelf";
+    const mid  = ctx.createBiquadFilter(); mid.type = "peaking";
+    const hs   = ctx.createBiquadFilter(); hs.type = "highshelf";
+    const gain = ctx.createGain(); // vocal fader
+    const og   = ctx.createGain(); // preset output trim
+
+    compRef.current = comp;
+    hpRef.current   = hp;
+    lsRef.current   = ls;
+    midRef.current  = mid;
+    hsRef.current   = hs;
+    gainNodeRef.current = gain;
+    outGainRef.current  = og;
+
+    source.connect(comp);
+    comp.connect(hp);
+    hp.connect(ls);
+    ls.connect(mid);
+    mid.connect(hs);
+    hs.connect(gain);
+    gain.connect(og);
+    og.connect(ctx.destination);
+
+    applyPreset(activePreset, ctx);
+  }, [activePreset, applyPreset]);
+
+  // Re-apply when preset changes
+  useEffect(() => {
+    if (audioCtxRef.current && compRef.current) {
+      applyPreset(activePreset, audioCtxRef.current);
+    }
+  }, [activePreset, applyPreset]);
+
+  // Beat volume
   useEffect(() => {
     if (ytPlayerRef.current && ready) ytPlayerRef.current.setVolume(beatVol);
   }, [beatVol, ready]);
 
-  // Sync vocal volume
+  // Vocal volume (via GainNode when chain active, else direct)
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = vocalVol / 100;
+    if (gainNodeRef.current && audioCtxRef.current) {
+      gainNodeRef.current.gain.setTargetAtTime(vocalVol / 100, audioCtxRef.current.currentTime, 0.01);
+    } else if (audioRef.current) {
+      audioRef.current.volume = vocalVol / 100;
+    }
   }, [vocalVol]);
-
-  const startTick = useCallback(() => {
-    if (tickRef.current) return;
-    tickRef.current = setInterval(() => {
-      const a = audioRef.current;
-      if (a) {
-        setCurrentTime(a.currentTime);
-        if (!duration && a.duration && isFinite(a.duration)) setDuration(a.duration);
-      }
-    }, 250);
-  }, [duration]);
 
   const stopTick = useCallback(() => {
     if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
+    if (vocalTimerRef.current) { clearTimeout(vocalTimerRef.current); vocalTimerRef.current = null; }
   }, []);
 
   const handlePlay = useCallback(() => {
     if (!ready) return;
     const a = audioRef.current;
     if (!a) return;
-    ytPlayerRef.current.playVideo();
-    a.play().catch(() => {});
+
+    ensureAudioChain();
+    if (audioCtxRef.current?.state === "suspended") audioCtxRef.current.resume();
+
+    if (vocalOffset > 0) {
+      // Beat starts now; vocal starts after `vocalOffset` ms
+      ytPlayerRef.current.seekTo(currentTime, true);
+      ytPlayerRef.current.playVideo();
+      vocalTimerRef.current = setTimeout(() => {
+        a.currentTime = 0;
+        a.play().catch(() => {});
+      }, vocalOffset * 1000);
+    } else {
+      // Both start together
+      ytPlayerRef.current.seekTo(currentTime, true);
+      ytPlayerRef.current.playVideo();
+      a.play().catch(() => {});
+    }
+
     setPlaying(true);
-    startTick();
-  }, [ready, startTick]);
+    tickRef.current = setInterval(() => {
+      const cur = audioRef.current;
+      if (cur && !isNaN(cur.currentTime)) {
+        setCurrentTime(cur.currentTime);
+        if (!duration && cur.duration && isFinite(cur.duration)) setDuration(cur.duration);
+      }
+    }, 100);
+  }, [ready, ensureAudioChain, vocalOffset, currentTime, duration]);
 
   const handlePause = useCallback(() => {
     ytPlayerRef.current?.pauseVideo?.();
     audioRef.current?.pause();
-    setPlaying(false);
     stopTick();
+    setPlaying(false);
   }, [stopTick]);
 
   const handleToggle = useCallback(() => {
@@ -122,97 +252,219 @@ function MixPlayer({ rec }: { rec: RecordingItem }) {
   const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const t = Number(e.target.value);
     if (audioRef.current) audioRef.current.currentTime = t;
-    ytPlayerRef.current?.seekTo?.(t, true);
+    ytPlayerRef.current?.seekTo?.(t + vocalOffset, true);
     setCurrentTime(t);
-  }, []);
+  }, [vocalOffset]);
 
-  // Stop when vocal ends
   const handleEnded = useCallback(() => {
     ytPlayerRef.current?.pauseVideo?.();
-    setPlaying(false);
     stopTick();
+    setPlaying(false);
     setCurrentTime(0);
     if (audioRef.current) audioRef.current.currentTime = 0;
     ytPlayerRef.current?.seekTo?.(0, true);
   }, [stopTick]);
 
+  // ── Timeline drag logic ──────────────────────────────────────────────────────
+  // totalDuration is used to map pixel ↔ seconds on the timeline
+  const totalDur = Math.max(duration + vocalOffset + 2, 60);
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragStartX.current = e.clientX;
+    dragStartOffset.current = vocalOffset;
+  }, [vocalOffset]);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (dragStartX.current === null) return;
+      const tl = timelineRef.current;
+      if (!tl) return;
+      const pxPerSec = tl.clientWidth / totalDur;
+      const deltaSec = (e.clientX - dragStartX.current) / pxPerSec;
+      setVocalOffset(Math.max(0, Math.min(dragStartOffset.current + deltaSec, totalDur - duration - 1)));
+    };
+    const onUp = () => { dragStartX.current = null; };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, [totalDur, duration]);
+
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const beatLeftPct   = 0;
+  const vocalLeftPct  = (vocalOffset / totalDur) * 100;
+  const vocalWidthPct = (duration / totalDur) * 100;
 
   return (
-    <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 flex flex-col gap-3">
-      <div className="flex items-center gap-2 mb-0.5">
-        <Layers className="w-3.5 h-3.5 text-primary" />
+    <div className="rounded-xl border border-primary/20 bg-[#0e0e12] flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-white/5">
+        <Layers className="w-3.5 h-3.5 text-primary shrink-0" />
         <span className="text-xs font-bold uppercase tracking-widest text-primary">Mix Monitor</span>
         {!ready && <Loader2 className="w-3 h-3 animate-spin text-text-muted ml-auto" />}
+        {vocalOffset > 0 && (
+          <span className="ml-auto text-[10px] text-text-muted font-mono">
+            vocal +{vocalOffset.toFixed(1)}s
+          </span>
+        )}
       </div>
 
-      {/* Hidden YT iframe + vocal audio */}
-      <div id={ytDivId} className="hidden" />
-      <audio
-        ref={audioRef}
-        src={servingUrl}
-        onEnded={handleEnded}
-        onLoadedMetadata={(e) => setDuration((e.target as HTMLAudioElement).duration)}
-        preload="metadata"
-      />
+      {/* ── Timeline ──────────────────────────────────────────────────────────── */}
+      <div ref={timelineRef} className="px-4 py-3 select-none">
+        {/* Time ruler */}
+        <div className="flex justify-between mb-1 px-0.5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <span key={i} className="text-[9px] text-text-muted font-mono">
+              {formatSeconds(Math.round((totalDur / 4) * i))}
+            </span>
+          ))}
+        </div>
 
-      {/* Playhead */}
-      <div className="flex flex-col gap-1">
-        <input
-          type="range"
-          min={0}
-          max={duration || 1}
-          step={0.1}
-          value={currentTime}
-          onChange={handleSeek}
-          className="w-full h-1.5 rounded-full accent-primary cursor-pointer"
-          style={{
-            background: `linear-gradient(to right, var(--color-primary) ${pct}%, rgba(255,255,255,0.1) ${pct}%)`,
-          }}
-        />
-        <div className="flex justify-between text-[10px] text-text-muted font-mono">
-          <span>{formatSeconds(Math.floor(currentTime))}</span>
-          <span>{duration ? formatSeconds(Math.floor(duration)) : "--:--"}</span>
+        {/* Beat lane */}
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="text-[9px] font-bold uppercase tracking-widest text-primary w-10 shrink-0">Beat</span>
+          <div className="relative flex-1 h-7 rounded-md bg-[#1a1a22] overflow-hidden">
+            <div
+              className="absolute inset-y-0 left-0 rounded-md flex items-center px-2"
+              style={{ width: "100%", background: "linear-gradient(90deg,#ff3b30 0%,#c0392b 100%)" }}
+            >
+              <span className="text-[9px] text-white/80 font-semibold truncate">{rec.beatTitle}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Vocal lane — draggable */}
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-bold uppercase tracking-widest text-text-muted w-10 shrink-0">Vocal</span>
+          <div className="relative flex-1 h-7 rounded-md bg-[#1a1a22] overflow-hidden">
+            <div
+              className="absolute inset-y-0 flex items-center px-2 rounded-md cursor-grab active:cursor-grabbing group"
+              style={{
+                left: `${vocalLeftPct}%`,
+                width: `${Math.max(vocalWidthPct, 3)}%`,
+                background: "linear-gradient(90deg,#6366f1 0%,#8b5cf6 100%)",
+                minWidth: 28,
+              }}
+              onMouseDown={handleDragStart}
+            >
+              <span className="text-[9px] text-white/80 font-semibold truncate pointer-events-none">
+                Take
+              </span>
+              {/* drag handle dots */}
+              <div className="absolute right-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-60 group-hover:opacity-100">
+                <span className="block w-0.5 h-0.5 rounded-full bg-white" />
+                <span className="block w-0.5 h-0.5 rounded-full bg-white" />
+                <span className="block w-0.5 h-0.5 rounded-full bg-white" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Playhead */}
+        <div className="mt-2.5 flex items-center gap-2">
+          <span className="text-[9px] font-mono text-text-muted w-10 shrink-0">{formatSeconds(Math.floor(currentTime))}</span>
+          <div className="relative flex-1 h-1 rounded-full bg-white/10">
+            <div
+              className="absolute inset-y-0 left-0 bg-primary rounded-full pointer-events-none"
+              style={{ width: `${pct}%` }}
+            />
+            <input
+              type="range" min={0} max={duration || 1} step={0.1} value={currentTime}
+              onChange={handleSeek}
+              className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
+            />
+          </div>
+          <span className="text-[9px] font-mono text-text-muted w-10 text-right shrink-0">
+            {duration ? formatSeconds(Math.floor(duration)) : "--:--"}
+          </span>
         </div>
       </div>
 
-      {/* Controls row */}
-      <div className="flex items-center gap-3">
+      {/* ── Transport + Volume ─────────────────────────────────────────────────── */}
+      <div className="px-4 py-2 border-t border-white/5 flex items-center gap-4">
+        {/* Play/Pause */}
         <button
           onClick={handleToggle}
           disabled={!ready}
-          className="w-9 h-9 rounded-full bg-primary hover:bg-primary/80 disabled:opacity-40 flex items-center justify-center transition-all shrink-0 shadow-lg shadow-primary/25"
+          className="w-9 h-9 rounded-full bg-primary hover:bg-primary/80 disabled:opacity-40 flex items-center justify-center shrink-0 transition-all shadow-lg shadow-primary/25"
         >
           {playing
             ? <Pause className="w-4 h-4 text-white fill-white" />
             : <Play className="w-4 h-4 text-white fill-white translate-x-0.5" />}
         </button>
 
-        {/* Beat volume */}
-        <div className="flex items-center gap-1.5 flex-1">
+        {/* Beat vol */}
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <Music2 className="w-3 h-3 text-primary shrink-0" />
-          <span className="text-[10px] text-text-muted w-7 shrink-0">Beat</span>
+          <span className="text-[10px] text-text-muted font-medium w-6 shrink-0">Beat</span>
           <input
             type="range" min={0} max={100} value={beatVol}
             onChange={(e) => setBeatVol(Number(e.target.value))}
-            className="flex-1 h-1 accent-primary cursor-pointer"
+            className="flex-1 h-1 accent-primary cursor-pointer min-w-0"
           />
           <span className="text-[10px] text-text-muted font-mono w-7 text-right shrink-0">{beatVol}%</span>
         </div>
+
+        {/* Vocal vol */}
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <Mic className="w-3 h-3 text-violet-400 shrink-0" />
+          <span className="text-[10px] text-text-muted font-medium w-6 shrink-0">Vocal</span>
+          <input
+            type="range" min={0} max={100} value={vocalVol}
+            onChange={(e) => setVocalVol(Number(e.target.value))}
+            className="flex-1 h-1 accent-violet-500 cursor-pointer min-w-0"
+          />
+          <Volume2 className="w-3 h-3 text-text-muted shrink-0" />
+          <span className="text-[10px] text-text-muted font-mono w-7 text-right shrink-0">{vocalVol}%</span>
+        </div>
       </div>
 
-      {/* Vocal volume */}
-      <div className="flex items-center gap-1.5 pl-12">
-        <Mic className="w-3 h-3 text-red-400 shrink-0" />
-        <span className="text-[10px] text-text-muted w-7 shrink-0">Vocal</span>
-        <input
-          type="range" min={0} max={100} value={vocalVol}
-          onChange={(e) => setVocalVol(Number(e.target.value))}
-          className="flex-1 h-1 accent-red-500 cursor-pointer"
-        />
-        <Volume2 className="w-3 h-3 text-text-muted shrink-0" />
-        <span className="text-[10px] text-text-muted font-mono w-7 text-right shrink-0">{vocalVol}%</span>
+      {/* ── Effects rack ──────────────────────────────────────────────────────── */}
+      <div className="px-4 py-2.5 border-t border-white/5">
+        <div className="flex items-center gap-2 mb-2">
+          <Sliders className="w-3 h-3 text-text-muted" />
+          <span className="text-[9px] font-bold uppercase tracking-widest text-text-muted">Vocal FX</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {(Object.keys(PRESETS) as EffectPreset[]).map((key) => (
+            <button
+              key={key}
+              onClick={() => setActivePreset(key)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
+                activePreset === key
+                  ? `${PRESETS[key].color} bg-white/5`
+                  : "text-text-muted border-border hover:border-white/20 hover:text-text-main"
+              }`}
+            >
+              {PRESETS[key].label}
+            </button>
+          ))}
+        </div>
+        {/* Preset description */}
+        <p className="text-[10px] text-text-muted mt-1.5 leading-relaxed">
+          {{
+            dry:    "No processing — raw mic signal",
+            booth:  "Light 4:1 compression · presence boost at 3kHz",
+            punchy: "Hard 8:1 compression · aggressive 5kHz air",
+            warm:   "Gentle compression · low-mid warmth",
+            lofi:   "Heavy squash · lo-pass rolloff above 6kHz",
+            bright: "Clean comp · +6dB high shelf sparkle",
+          }[activePreset]}
+        </p>
       </div>
+
+      {/* Hidden elements */}
+      <div id={ytDivId} className="hidden" />
+      <audio
+        ref={audioRef}
+        src={servingUrl}
+        onEnded={handleEnded}
+        onLoadedMetadata={(e) => {
+          const d = (e.target as HTMLAudioElement).duration;
+          if (isFinite(d)) setDuration(d);
+        }}
+        preload="metadata"
+      />
     </div>
   );
 }
@@ -250,15 +502,10 @@ function RecordingCard({ rec }: { rec: RecordingItem }) {
       {/* Vocal-only playback */}
       <div className="rounded-xl p-3 border bg-background border-border">
         <div className="flex items-center gap-2 mb-2">
-          <Mic className="w-3 h-3 text-red-400" />
+          <Mic className="w-3 h-3 text-violet-400" />
           <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Vocal only</span>
         </div>
-        <audio
-          src={servingUrl}
-          controls
-          className="w-full h-8"
-          style={{ accentColor: "#ef4444" }}
-        />
+        <audio src={servingUrl} controls className="w-full h-8" style={{ accentColor: "#8b5cf6" }} />
       </div>
 
       {/* Mix monitor toggle */}
@@ -271,7 +518,7 @@ function RecordingCard({ rec }: { rec: RecordingItem }) {
         }`}
       >
         <Layers className="w-3.5 h-3.5" />
-        {mixOpen ? "Hide Mix Monitor" : "Play with Beat"}
+        {mixOpen ? "Close DAW" : "Open in DAW"}
       </button>
 
       {mixOpen && <MixPlayer rec={rec} />}
@@ -280,7 +527,7 @@ function RecordingCard({ rec }: { rec: RecordingItem }) {
       <div className="flex items-center gap-2">
         <a
           href={servingUrl}
-          download={`${rec.beatTitle} - freestyle`}
+          download={`${rec.beatTitle} - vocal`}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-text-muted hover:text-text-main border border-border hover:border-primary/30 transition-all"
         >
           <Download className="w-3.5 h-3.5" />
@@ -300,11 +547,7 @@ function RecordingCard({ rec }: { rec: RecordingItem }) {
           disabled={deleteRecording.isPending}
           className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-text-muted hover:text-red-400 border border-border hover:border-red-500/20 transition-all disabled:opacity-50"
         >
-          {deleteRecording.isPending ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <Trash2 className="w-3.5 h-3.5" />
-          )}
+          {deleteRecording.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
           Delete
         </button>
       </div>
@@ -332,29 +575,11 @@ export default function Recordings() {
             </h1>
           </div>
           <nav className="flex items-center gap-1 bg-surface/60 border border-border rounded-xl px-1.5 py-1">
-            <Link href="/">
-              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
-                <Tv2 className="w-3.5 h-3.5" />Feed
-              </span>
-            </Link>
-            <Link href="/beats">
-              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
-                <Music2 className="w-3.5 h-3.5" />Beats
-              </span>
-            </Link>
-            <Link href="/lyrics">
-              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
-                <FileText className="w-3.5 h-3.5" />Lyrics
-              </span>
-            </Link>
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-semibold bg-primary/15 text-primary border border-primary/20">
-              <Mic className="w-3.5 h-3.5" />Recordings
-            </span>
-            <Link href="/saved">
-              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
-                <Bookmark className="w-3.5 h-3.5" />Saved
-              </span>
-            </Link>
+            <Link href="/"><span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer"><Tv2 className="w-3.5 h-3.5" />Feed</span></Link>
+            <Link href="/beats"><span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer"><Music2 className="w-3.5 h-3.5" />Beats</span></Link>
+            <Link href="/lyrics"><span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer"><FileText className="w-3.5 h-3.5" />Lyrics</span></Link>
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-semibold bg-primary/15 text-primary border border-primary/20"><Mic className="w-3.5 h-3.5" />Recordings</span>
+            <Link href="/saved"><span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer"><Bookmark className="w-3.5 h-3.5" />Saved</span></Link>
           </nav>
         </div>
       </header>
@@ -366,9 +591,7 @@ export default function Recordings() {
               <Cloud className="w-6 h-6 text-blue-400" />
               Cloud Recordings
             </h2>
-            <p className="text-text-muted text-sm mt-1">
-              Your freestyle recordings — hit "Play with Beat" to hear the mix
-            </p>
+            <p className="text-text-muted text-sm mt-1">Hit "Open in DAW" to mix, offset, and process your vocals</p>
           </div>
           {recordings && recordings.length > 0 && (
             <span className="text-xs text-text-muted bg-surface border border-border px-2.5 py-1 rounded-full">
@@ -379,8 +602,7 @@ export default function Recordings() {
 
         {isLoading && (
           <div className="flex items-center justify-center py-20 gap-3 text-text-muted">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Loading recordings…</span>
+            <Loader2 className="w-5 h-5 animate-spin" /><span>Loading recordings…</span>
           </div>
         )}
 
@@ -395,8 +617,7 @@ export default function Recordings() {
             </p>
             <Link href="/beats">
               <span className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl transition-all shadow-lg shadow-primary/20 cursor-pointer">
-                <Music2 className="w-4 h-4" />
-                Go to Beats
+                <Music2 className="w-4 h-4" />Go to Beats
               </span>
             </Link>
           </div>
@@ -404,9 +625,7 @@ export default function Recordings() {
 
         {!isLoading && recordings && recordings.length > 0 && (
           <div className="flex flex-col gap-4">
-            {recordings.map((rec) => (
-              <RecordingCard key={rec.id} rec={rec} />
-            ))}
+            {recordings.map((rec) => <RecordingCard key={rec.id} rec={rec} />)}
           </div>
         )}
       </main>
