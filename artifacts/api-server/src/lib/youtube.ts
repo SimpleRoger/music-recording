@@ -2,7 +2,7 @@ import { logger } from "./logger";
 
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 
-function getApiKey(): string {
+export function getApiKey(): string {
   const key = process.env.YOUTUBE_API_KEY;
   if (!key) {
     throw new Error("YOUTUBE_API_KEY environment variable is not set");
