@@ -74,10 +74,38 @@ function SearchCard({ song, extracting, done, progress, error, onExtract }: Sear
         </div>
 
         {/* Status area */}
-        {extracting && progress && (
-          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-amber-400">
-            <Loader2 className="w-3 h-3 animate-spin shrink-0" />
-            <span className="truncate">{progress.message}</span>
+        {extracting && (
+          <div className="mt-2 space-y-1">
+            {/* Step pills */}
+            <div className="flex items-center gap-1">
+              {(["download", "extract", "upload"] as const).map((s) => {
+                const labels = { download: "Download", extract: "AI Separation", upload: "Upload" };
+                const stepOrder = { download: 0, extract: 1, upload: 2 };
+                const currentOrder = progress ? stepOrder[progress.step] : -1;
+                const thisOrder = stepOrder[s];
+                const isActive = progress?.step === s;
+                const isDone = currentOrder > thisOrder;
+                return (
+                  <span key={s} className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold border transition-colors ${
+                    isActive ? "bg-amber-500/15 text-amber-400 border-amber-500/30" :
+                    isDone ? "bg-green-500/10 text-green-400 border-green-500/20" :
+                    "bg-surface text-text-muted/40 border-border"
+                  }`}>
+                    {isDone ? "✓" : ""}{labels[s]}
+                  </span>
+                );
+              })}
+            </div>
+            {/* Progress bar */}
+            <div className="h-1 bg-surface-hover rounded-full overflow-hidden">
+              <div
+                className="h-full bg-amber-400 rounded-full transition-all duration-700"
+                style={{ width: `${progress?.pct ?? 10}%` }}
+              />
+            </div>
+            {progress && (
+              <p className="text-[10px] text-text-muted truncate">{progress.message}</p>
+            )}
           </div>
         )}
         {done && (

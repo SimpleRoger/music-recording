@@ -23,6 +23,7 @@ export interface SongSearchResult {
 export interface ExtractionProgress {
   step: "download" | "extract" | "upload";
   message: string;
+  pct?: number;
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
