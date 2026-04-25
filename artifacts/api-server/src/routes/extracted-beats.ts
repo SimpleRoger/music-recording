@@ -86,14 +86,37 @@ function runProcess(cmd: string, args: string[], opts: RunOpts = {}): Promise<st
 
 async function downloadAudio(videoId: string, outDir: string, opts: RunOpts = {}): Promise<string> {
   const hasCookies = fs.existsSync(COOKIES_FILE);
+  const cookieArgs = hasCookies ? ["--cookies", COOKIES_FILE] : [];
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+
+  // ── Pre-flight: check the video is actually downloadable (fast, ~2s) ──────
+  try {
+    await runProcess(YTDLP, [
+      "--cache-dir", YTDLP_CACHE_DIR,
+      "--no-playlist", "--simulate", "--no-warnings",
+      ...cookieArgs,
+      url,
+    ], { ...opts, timeoutMs: 30_000 });
+  } catch (e: any) {
+    const msg = e.message ?? "";
+    if (msg.includes("unavailable") || msg.includes("Private") || msg.includes("Sign in")) {
+      throw new Error(
+        "This video is not available for download on this server — it is likely a major-label music video blocked by Content ID. " +
+        "Try searching for an audio-only upload, a lyrics video, or a beat/instrumental version instead."
+      );
+    }
+    throw e; // re-throw if it's a different error
+  }
+
+  // ── Actual download ──────────────────────────────────────────────────────
   const args = [
     "--cache-dir", YTDLP_CACHE_DIR,
     "--no-playlist",
     "--format", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
     "--no-warnings",
     "-o", path.join(outDir, "%(id)s.%(ext)s"),
-    ...(hasCookies ? ["--cookies", COOKIES_FILE] : []),
-    `https://www.youtube.com/watch?v=${videoId}`,
+    ...cookieArgs,
+    url,
   ];
   await runProcess(YTDLP, args, { ...opts, timeoutMs: 3 * 60 * 1000 });
   const files = fs.readdirSync(outDir).filter((f) => f.startsWith(videoId));

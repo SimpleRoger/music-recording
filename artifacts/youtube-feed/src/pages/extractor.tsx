@@ -287,7 +287,7 @@ export default function Extractor() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder='Search a song — try "Blinding Lights" or "As It Was"'
+            placeholder='Search a song — try "Blinding Lights lyrics" or "Drake beat"'
             className="w-full h-12 pl-10 pr-10 bg-surface border border-border rounded-xl text-text-main placeholder-text-muted text-sm focus:outline-none focus:border-primary/50 transition-colors"
           />
           {input && (
@@ -343,14 +343,25 @@ export default function Extractor() {
 
         {/* Extraction note */}
         {!isSearching && (
-          <div className="mb-8 p-4 rounded-xl bg-surface border border-border text-sm text-text-muted leading-relaxed">
-            <p className="font-semibold text-text-main mb-1">How it works</p>
-            <ol className="list-decimal list-inside space-y-1">
-              <li>Search for any song above</li>
-              <li>Click <strong className="text-text-main">Extract Beat</strong> — the audio downloads and runs through Demucs AI to separate vocals from the music</li>
-              <li>The instrumental (drums + bass + everything except vocals) is saved to your library</li>
-            </ol>
-            <p className="mt-2 text-amber-400/80 text-xs flex items-center gap-1"><Clock className="w-3 h-3" />Extraction typically takes 1–3 minutes per song on first run</p>
+          <div className="mb-8 p-4 rounded-xl bg-surface border border-border text-sm text-text-muted leading-relaxed space-y-3">
+            <div>
+              <p className="font-semibold text-text-main mb-1">How it works</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Search for any song above</li>
+                <li>Click <strong className="text-text-main">Extract Beat</strong> — audio downloads then Demucs AI strips the vocals</li>
+                <li>The clean instrumental is saved to your library</li>
+              </ol>
+              <p className="mt-2 text-amber-400/80 text-xs flex items-center gap-1"><Clock className="w-3 h-3" />Extraction takes 1–3 minutes per song on first run</p>
+            </div>
+            <div className="border-t border-border pt-3">
+              <p className="font-semibold text-text-main mb-1 text-xs">💡 For best results, search for:</p>
+              <ul className="text-xs space-y-0.5 list-disc list-inside">
+                <li><span className="text-text-main">Lyrics / audio-only uploads</span> — e.g. "Blinding Lights lyrics"</li>
+                <li><span className="text-text-main">Beat / instrumental videos</span> — works best</li>
+                <li><span className="text-text-main">Indie or independent artists</span> — always open</li>
+              </ul>
+              <p className="mt-1.5 text-text-muted/60 text-[10px]">Official VEVO / major-label videos may be blocked by Content ID on servers. If you get a "not available" error, search for a lyric or audio version.</p>
+            </div>
           </div>
         )}
 
