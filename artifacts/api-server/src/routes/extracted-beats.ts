@@ -168,13 +168,20 @@ async function runExtraction(
     if (!noVocalsPath || !fs.existsSync(noVocalsPath)) throw new Error("Demucs produced no output");
     update("extract", "Vocals separated ✓", 80);
 
-    update("upload", "Uploading instrumental to cloud…", 85);
-    const objectName = `extracted-beats/${videoId}-instrumental.mp3`;
-    const objectPath = await uploadToStorage(noVocalsPath, objectName, "audio/mpeg");
+    // Demucs puts vocals.mp3 in the same folder as no_vocals.mp3
+    const vocalsPath = noVocalsPath.replace("no_vocals.mp3", "vocals.mp3");
+
+    update("upload", "Uploading tracks to cloud…", 85);
+    const [objectPath, vocalsObjectPath] = await Promise.all([
+      uploadToStorage(noVocalsPath, `extracted-beats/${videoId}-instrumental.mp3`, "audio/mpeg"),
+      fs.existsSync(vocalsPath)
+        ? uploadToStorage(vocalsPath, `extracted-beats/${videoId}-vocals.mp3`, "audio/mpeg")
+        : Promise.resolve(null),
+    ]);
 
     const [created] = await db
       .insert(extractedBeatsTable)
-      .values({ videoId, title, thumbnailUrl, channelName, objectPath })
+      .values({ videoId, title, thumbnailUrl, channelName, objectPath, vocalsObjectPath })
       .returning();
 
     job.status = "done";

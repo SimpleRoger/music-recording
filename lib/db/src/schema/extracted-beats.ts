@@ -7,6 +7,7 @@ export const extractedBeatsTable = pgTable("extracted_beats", {
   thumbnailUrl: text("thumbnail_url").notNull().default(""),
   channelName: text("channel_name").notNull().default(""),
   objectPath: text("object_path").notNull(),
+  vocalsObjectPath: text("vocals_object_path"),
   durationSeconds: integer("duration_seconds").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

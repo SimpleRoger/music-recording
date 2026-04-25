@@ -7,6 +7,7 @@ export interface ExtractedBeat {
   thumbnailUrl: string;
   channelName: string;
   objectPath: string;
+  vocalsObjectPath: string | null;
   durationSeconds: number;
   createdAt: string;
 }
