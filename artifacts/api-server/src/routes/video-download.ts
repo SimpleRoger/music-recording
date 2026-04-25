@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 import { randomUUID } from "crypto";
 import path from "path";
 import fs from "fs";
@@ -8,7 +8,17 @@ import os from "os";
 const router: IRouter = Router();
 
 const YTDLP  = process.env.YTDLP_PATH  ?? path.resolve(__dirname, "../../../.pythonlibs/bin/yt-dlp");
-const FFMPEG = process.env.FFMPEG_PATH ?? "ffmpeg";
+
+// Resolve ffmpeg to its containing directory — yt-dlp prefers a dir for --ffmpeg-location
+function resolveFfmpegDir(): string {
+  if (process.env.FFMPEG_PATH) return path.dirname(process.env.FFMPEG_PATH);
+  try {
+    const bin = execSync("which ffmpeg", { encoding: "utf8" }).trim();
+    if (bin) return path.dirname(bin);
+  } catch {}
+  return "";   // empty string → yt-dlp falls back to PATH lookup
+}
+const FFMPEG_DIR = resolveFfmpegDir();
 const COOKIES_FILE = process.env.YTDLP_COOKIES_PATH ?? path.resolve(__dirname, "../../../youtube-cookies.txt");
 const YTDLP_CACHE_DIR = process.env.YTDLP_CACHE_DIR ?? path.resolve(__dirname, "../../../.ytdlp-cache");
 
@@ -52,26 +62,45 @@ const FORMAT_1080 = [
 ].join("/");
 
 // ── Download worker ──────────────────────────────────────────────────────────
-async function runDownload(jobId: string, videoId: string, title: string) {
+async function runDownload(
+  jobId: string,
+  videoId: string,
+  title: string,
+  startTime?: string,
+  endTime?: string,
+) {
   const job = jobs.get(jobId)!;
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tubefeed-vdl-"));
+  const isClip = Boolean(startTime || endTime);
 
   try {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
     const hasCookies = fs.existsSync(COOKIES_FILE);
     const cookieArgs = hasCookies ? ["--cookies", COOKIES_FILE] : [];
+
+    // Build section string: "*1:02-1:13", "*-1:13" (from start), "*1:02-inf" (to end)
+    const sectionArgs: string[] = [];
+    if (isClip) {
+      const start = startTime?.trim() || "0";
+      const end   = endTime?.trim()   || "inf";
+      sectionArgs.push("--download-sections", `*${start}-${end}`);
+      // Keep chapters aligned after cutting
+      sectionArgs.push("--force-keyframes-at-cuts");
+    }
+
     const outTemplate = path.join(tmpDir, "%(title)s [%(height)sp].%(ext)s");
 
     await new Promise<void>((resolve, reject) => {
       const child = spawn(YTDLP, [
         "--cache-dir", YTDLP_CACHE_DIR,
         "--no-playlist",
-        "--ffmpeg-location", FFMPEG,
+        ...(FFMPEG_DIR ? ["--ffmpeg-location", FFMPEG_DIR] : []),
         "--format", FORMAT_1080,
         "--merge-output-format", "mp4",
         "--output", outTemplate,
         "--progress",
         "--newline",
+        ...sectionArgs,
         ...cookieArgs,
         url,
       ]);
@@ -132,23 +161,26 @@ async function runDownload(jobId: string, videoId: string, title: string) {
 
 // Start a download job
 router.post("/video-download", async (req: Request, res: Response): Promise<void> => {
-  const { videoId, title } = req.body ?? {};
+  const { videoId, title, startTime, endTime } = req.body ?? {};
   if (!videoId || typeof videoId !== "string") {
     res.status(400).json({ error: "videoId is required" });
     return;
   }
 
   const jobId = randomUUID();
+  const isClip = Boolean(startTime || endTime);
   const job: DlJob = {
     status: "running",
     pct: 0,
-    message: "Starting download…",
+    message: isClip
+      ? `Preparing clip ${startTime ?? "0:00"}–${endTime ?? "end"}…`
+      : "Starting download…",
     startedAt: Date.now(),
   };
   jobs.set(jobId, job);
 
   // Fire-and-forget
-  runDownload(jobId, videoId, title ?? videoId).catch(() => {});
+  runDownload(jobId, videoId, title ?? videoId, startTime, endTime).catch(() => {});
 
   res.json({ jobId });
 });

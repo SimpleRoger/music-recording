@@ -4,7 +4,7 @@ import {
   X, ExternalLink, Sparkles, Loader2, AlertCircle,
   ChevronDown, ChevronUp, Users, Star, Lightbulb,
   FileText, BookOpen, Zap, CheckCircle2, FileSearch,
-  Download, CheckCircle,
+  Download, CheckCircle, Scissors, Film,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { Video } from "@workspace/api-client-react";
@@ -80,14 +80,26 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
   const [descExpanded, setDescExpanded] = useState(false);
   const { state: dlState, start: startDownload, reset: resetDownload, downloadUrl } = useVideoDownload();
   const prevVideoId = useRef<string | null>(null);
+  const [showDlPicker, setShowDlPicker] = useState(false);
+  const [dlStart, setDlStart] = useState("");
+  const [dlEnd, setDlEnd] = useState("");
 
   // Reset download state when video changes
   useEffect(() => {
     if (video?.videoId !== prevVideoId.current) {
       prevVideoId.current = video?.videoId ?? null;
       resetDownload();
+      setShowDlPicker(false);
+      setDlStart("");
+      setDlEnd("");
     }
   }, [video?.videoId, resetDownload]);
+
+  const handleDownload = (startTime?: string, endTime?: string) => {
+    if (!video) return;
+    setShowDlPicker(false);
+    startDownload(video.videoId, video.title, startTime || undefined, endTime || undefined);
+  };
 
   const isOpen = video !== null;
 
@@ -264,10 +276,10 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
                     Open on YouTube
                   </a>
 
-                  {/* 1080p video download */}
-                  {dlState.status === "idle" && (
+                  {/* ── 1080p download / clip picker ── */}
+                  {dlState.status === "idle" && !showDlPicker && (
                     <button
-                      onClick={() => startDownload(video.videoId, video.title)}
+                      onClick={() => setShowDlPicker(true)}
                       className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-primary transition-colors"
                     >
                       <Download className="w-3.5 h-3.5" />
@@ -291,27 +303,101 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
                   )}
 
                   {dlState.status === "done" && downloadUrl && (
-                    <a
-                      href={downloadUrl}
-                      download={dlState.filename ?? `${video.title}.mp4`}
-                      className="inline-flex items-center gap-1.5 text-xs text-green-400 hover:text-green-300 font-semibold transition-colors"
-                    >
-                      <CheckCircle className="w-3.5 h-3.5" />
-                      Save MP4
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={downloadUrl}
+                        download={dlState.filename ?? `${video.title}.mp4`}
+                        className="inline-flex items-center gap-1.5 text-xs text-green-400 hover:text-green-300 font-semibold transition-colors"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        Save MP4
+                      </a>
+                      <button
+                        onClick={() => { resetDownload(); setShowDlPicker(false); setDlStart(""); setDlEnd(""); }}
+                        className="text-xs text-text-muted hover:text-primary transition-colors"
+                      >
+                        Download another clip
+                      </button>
+                    </div>
                   )}
 
                   {dlState.status === "error" && (
                     <button
-                      onClick={() => startDownload(video.videoId, video.title)}
+                      onClick={() => { resetDownload(); setShowDlPicker(true); }}
                       className="inline-flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors"
                       title={dlState.error}
                     >
                       <AlertCircle className="w-3.5 h-3.5" />
-                      Retry download
+                      Failed — try again
                     </button>
                   )}
                 </div>
+
+                {/* Clip picker panel */}
+                <AnimatePresence>
+                  {dlState.status === "idle" && showDlPicker && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="mt-3 p-3 rounded-xl bg-surface border border-border space-y-3">
+                        <p className="text-xs font-semibold text-text-main flex items-center gap-1.5">
+                          <Scissors className="w-3.5 h-3.5 text-primary" />
+                          Select a clip — or leave blank for the full video
+                        </p>
+
+                        <div className="flex items-center gap-2">
+                          <div className="flex flex-col gap-1 flex-1">
+                            <label className="text-[10px] text-text-muted uppercase tracking-widest font-semibold">Start</label>
+                            <input
+                              value={dlStart}
+                              onChange={(e) => setDlStart(e.target.value)}
+                              placeholder="e.g. 1:02"
+                              className="h-8 px-2.5 bg-background border border-border rounded-lg text-text-main text-sm focus:outline-none focus:border-primary/50 transition-colors font-mono"
+                            />
+                          </div>
+                          <span className="text-text-muted mt-5">→</span>
+                          <div className="flex flex-col gap-1 flex-1">
+                            <label className="text-[10px] text-text-muted uppercase tracking-widest font-semibold">End</label>
+                            <input
+                              value={dlEnd}
+                              onChange={(e) => setDlEnd(e.target.value)}
+                              placeholder="e.g. 1:13"
+                              className="h-8 px-2.5 bg-background border border-border rounded-lg text-text-main text-sm focus:outline-none focus:border-primary/50 transition-colors font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleDownload(dlStart || undefined, dlEnd || undefined)}
+                            disabled={!dlStart && !dlEnd}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-all"
+                          >
+                            <Scissors className="w-3.5 h-3.5" />
+                            Download Clip
+                          </button>
+                          <button
+                            onClick={() => handleDownload()}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-hover hover:bg-border text-text-muted text-xs font-semibold rounded-lg transition-all"
+                          >
+                            <Film className="w-3.5 h-3.5" />
+                            Full Video
+                          </button>
+                          <button
+                            onClick={() => setShowDlPicker(false)}
+                            className="ml-auto text-xs text-text-muted hover:text-text-main transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
 

@@ -32,16 +32,27 @@ export function useVideoDownload() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   };
 
-  const start = useCallback(async (videoId: string, title: string) => {
+  const start = useCallback(async (
+    videoId: string,
+    title: string,
+    startTime?: string,
+    endTime?: string,
+  ) => {
     stopPoll();
-    setState({ status: "running", pct: 0, message: "Starting download…" });
+    const isClip = Boolean(startTime || endTime);
+    setState({
+      status: "running", pct: 0,
+      message: isClip
+        ? `Preparing clip ${startTime ?? "0:00"}–${endTime ?? "end"}…`
+        : "Starting download…",
+    });
 
     let jobId: string;
     try {
       const { jobId: id } = await fetchJson<{ jobId: string }>(`${BASE}/api/video-download`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videoId, title }),
+        body: JSON.stringify({ videoId, title, startTime, endTime }),
       });
       jobId = id;
     } catch (e: any) {
