@@ -1,0 +1,99 @@
+Skip to content
+back2zack
+Instrumental_extractor
+Repository navigation
+Code
+Issues
+Pull requests
+Agents
+Actions
+Projects
+Security and quality
+Insights
+Owner avatar
+Instrumental_extractor
+Public
+back2zack/Instrumental_extractor
+Go to file
+t
+T
+Name		
+back2zack
+back2zack
+adjust args to run by command line
+66863e1
+ · 
+last year
+.vscode
+Initial commit
+last year
+.gitignore
+small changes frida
+last year
+README.md
+Create README.md
+last year
+Reverb.py
+adjust args to run by command line
+last year
+generate_instrumental.py
+adjust args to run by command line
+last year
+requirements.txt
+requirements
+last year
+Repository files navigation
+README
+🎵 Instrumental Audio Extractor 🎶
+This project automates the extraction of instrumental tracks from audio files by separating vocals, drums, bass, and other components. It uses Demucs, a deep learning-based source separation tool, to process music files and reconstruct the instrumental version without vocals.
+
+🚀 Features
+Automated Audio Processing – Just provide an audio file, and the script does the rest.
+Deep Learning-Based Separation – Uses Demucs to split tracks.
+Rebuilds the Instrumental – Combines drums, bass, and other elements into a final instrumental track.
+Fully Scripted – No manual work required.
+🛠️ How It Works
+Separates the input audio into multiple tracks: vocals.wav, drums.wav, bass.wav, and other.wav.
+Removes the vocals and reconstructs an instrumental version.
+Saves the final instrumental file as instrumental.wav.
+📦 Installation
+Make sure you have Python 3.9+ installed.
+
+1️⃣ Clone the Repository
+git clone https://github.com/yourusername/instrumental-extractor.git
+cd instrumental-extractor
+About
+No description, website, or topics provided.
+Resources
+ Readme
+ Activity
+Stars
+ 0 stars
+Watchers
+ 1 watching
+Forks
+ 0 forks
+Report repository
+Releases
+No releases published
+Packages
+No packages published
+Contributors
+1
+@back2zack
+back2zack Zakaria Barhdadi
+Languages
+Python
+100.0%
+Footer
+© 2026 GitHub, Inc.
+Footer navigation
+Terms
+Privacy
+Security
+Status
+Community
+Docs
+Contact
+Manage cookies
+Do not share my personal information

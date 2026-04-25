@@ -5,6 +5,7 @@ import Beats from "./pages/beats";
 import Lyrics from "./pages/lyrics";
 import Recordings from "./pages/recordings";
 import Saved from "./pages/saved";
+import Extractor from "./pages/extractor";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/lyrics" component={Lyrics} />
       <Route path="/recordings" component={Recordings} />
       <Route path="/saved" component={Saved} />
+      <Route path="/extractor" component={Extractor} />
       <Route>
         <div className="min-h-screen bg-background flex flex-col items-center justify-center text-center p-4">
           <h1 className="text-6xl font-display font-bold text-text-main mb-4">404</h1>

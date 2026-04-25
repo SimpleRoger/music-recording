@@ -349,3 +349,67 @@ export async function fetchRecentVideos(
     };
   });
 }
+
+export interface YouTubeVideoSearchResult {
+  videoId: string;
+  title: string;
+  thumbnailUrl: string;
+  channelName: string;
+  duration: string | null;
+  viewCount: string | null;
+}
+
+export async function searchVideos(query: string, maxResults = 12): Promise<YouTubeVideoSearchResult[]> {
+  const apiKey = getApiKey();
+
+  const searchUrl = `${YOUTUBE_API_BASE}/search?part=snippet&type=video&videoCategoryId=10&q=${encodeURIComponent(query)}&maxResults=${maxResults}&key=${apiKey}`;
+  const searchResp = await fetch(searchUrl);
+  if (!searchResp.ok) {
+    const body = await searchResp.text();
+    logger.error({ status: searchResp.status, body }, "YouTube video search error");
+    throw new Error(`YouTube API error: ${searchResp.status}`);
+  }
+
+  const searchData = (await searchResp.json()) as {
+    items?: Array<{
+      id: { videoId: string };
+      snippet: {
+        title: string;
+        channelTitle: string;
+        thumbnails?: { medium?: { url: string }; default?: { url: string } };
+      };
+    }>;
+  };
+
+  if (!searchData.items || searchData.items.length === 0) return [];
+
+  // Fetch duration + view count in one batch
+  const ids = searchData.items.map((i) => i.id.videoId).join(",");
+  const detailUrl = `${YOUTUBE_API_BASE}/videos?part=contentDetails,statistics&id=${encodeURIComponent(ids)}&key=${apiKey}`;
+  const detailResp = await fetch(detailUrl);
+  const detailMap = new Map<string, { duration: string | null; viewCount: string | null }>();
+
+  if (detailResp.ok) {
+    const detailData = (await detailResp.json()) as {
+      items?: Array<{ id: string; contentDetails?: { duration?: string }; statistics?: { viewCount?: string } }>;
+    };
+    for (const d of detailData.items ?? []) {
+      detailMap.set(d.id, {
+        duration: d.contentDetails?.duration ?? null,
+        viewCount: d.statistics?.viewCount ?? null,
+      });
+    }
+  }
+
+  return searchData.items.map((item) => {
+    const det = detailMap.get(item.id.videoId);
+    return {
+      videoId: item.id.videoId,
+      title: item.snippet.title,
+      thumbnailUrl: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? "",
+      channelName: item.snippet.channelTitle,
+      duration: det?.duration ?? null,
+      viewCount: det?.viewCount ?? null,
+    };
+  });
+}

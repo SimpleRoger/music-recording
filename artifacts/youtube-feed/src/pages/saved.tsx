@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Bookmark, Tv2, Music2, FileText, Mic, Plus, Trash2, ExternalLink, Loader2, AlertCircle } from "lucide-react";
+import { Bookmark, Tv2, Music2, FileText, Mic, Plus, Trash2, ExternalLink, Loader2, AlertCircle, Wand2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -229,6 +229,11 @@ export default function Saved() {
             <Link href="/recordings">
               <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
                 <Mic className="w-3.5 h-3.5" />Recordings
+              </span>
+            </Link>
+            <Link href="/extractor">
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
+                <Wand2 className="w-3.5 h-3.5" />Extractor
               </span>
             </Link>
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-semibold bg-primary/15 text-primary border border-primary/20">
