@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "wouter";
 import {
   Tv2, Music2, FileText, ChevronDown, ChevronUp, ExternalLink,
-  Trash2, PenLine, Play, Mic, Bookmark, Wand2, Search, X,
+  Trash2, PenLine, Play, Mic, Mic2, Bookmark, Wand2, Search, X,
   Download, BookOpen, Loader2, AlertCircle, Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BeatPlayer } from "../components/beat-player";
+import { KaraokePlayer } from "../components/karaoke-player";
 import type { Video } from "@workspace/api-client-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -314,6 +315,7 @@ export default function Lyrics() {
   const [draftLyrics, setDraftLyrics] = useState("");
   const [syncView, setSyncView] = useState<Set<string>>(new Set());
   const [activeBeat, setActiveBeat] = useState<Video | null>(null);
+  const [karaokeEntry, setKaraokeEntry] = useState<{ id: string; title: string; artist: string; syncedLyrics: string; beatVideoId?: string } | null>(null);
 
   useEffect(() => { setEntries(loadAllEntries()); }, []);
 
@@ -473,6 +475,22 @@ export default function Lyrics() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 shrink-0">
+                    {/* Karaoke button — only for synced lyrics */}
+                    {entry.syncedLyrics && (
+                      <button
+                        onClick={() => setKaraokeEntry({
+                          id: entry.id,
+                          title: entry.title,
+                          artist: entry.artist,
+                          syncedLyrics: entry.syncedLyrics!,
+                          beatVideoId: entry.beatVideoId,
+                        })}
+                        className="p-2 rounded-lg text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-colors"
+                        title="Karaoke mode"
+                      >
+                        <Mic2 className="w-4 h-4" />
+                      </button>
+                    )}
                     {entry.beatVideoId && (
                       <a href={`https://youtube.com/watch?v=${entry.beatVideoId}`} target="_blank" rel="noopener noreferrer"
                         className="p-2 rounded-lg text-text-muted hover:text-primary hover:bg-surface-hover transition-colors" title="Open on YouTube">
@@ -583,6 +601,13 @@ export default function Lyrics() {
         onClose={() => setActiveBeat(null)}
         onBeatSelect={(beat) => setActiveBeat(beat)}
       />
+
+      {karaokeEntry && (
+        <KaraokePlayer
+          entry={karaokeEntry}
+          onClose={() => setKaraokeEntry(null)}
+        />
+      )}
     </div>
   );
 }
