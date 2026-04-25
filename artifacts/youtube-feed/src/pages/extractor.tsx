@@ -3,8 +3,9 @@ import { Link } from "wouter";
 import {
   Tv2, Music2, FileText, Mic, Bookmark, Wand2, Search, X,
   Download, Trash2, Loader2, Play, CheckCircle2, AlertCircle,
-  Clock, Eye,
+  Clock, Eye, Mic2,
 } from "lucide-react";
+import { KaraokeStudio } from "../components/karaoke-studio";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   useSearchSongs, useExtractBeat, useExtractedBeats, useDeleteExtractedBeat,
@@ -145,7 +146,7 @@ function SearchCard({ song, extracting, done, progress, error, onExtract }: Sear
 }
 
 // ── Extracted beat card ───────────────────────────────────────────────────────
-function ExtractedCard({ beat }: { beat: ExtractedBeat }) {
+function ExtractedCard({ beat, onKaraoke }: { beat: ExtractedBeat; onKaraoke: (b: ExtractedBeat) => void }) {
   const deleteBeat = useDeleteExtractedBeat();
   const servingUrl = `/api/storage${beat.objectPath}`;
 
@@ -170,13 +171,19 @@ function ExtractedCard({ beat }: { beat: ExtractedBeat }) {
 
       <audio src={servingUrl} controls className="w-full h-8" style={{ accentColor: "#ff3b30" }} />
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => onKaraoke(beat)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-all"
+        >
+          <Mic2 className="w-3.5 h-3.5" />Karaoke
+        </button>
         <a
           href={servingUrl}
           download={`${beat.title} - instrumental`}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-text-muted hover:text-text-main border border-border hover:border-primary/30 transition-all"
         >
-          <Download className="w-3.5 h-3.5" />Download WAV
+          <Download className="w-3.5 h-3.5" />Download
         </a>
         <a
           href={`https://youtube.com/watch?v=${beat.videoId}`}
@@ -206,6 +213,7 @@ export default function Extractor() {
   const { data: results, isLoading: searching } = useSearchSongs(query);
   const { data: extracted } = useExtractedBeats();
   const extractBeat = useExtractBeat();
+  const [karaokeBeat, setKaraokeBeat] = useState<ExtractedBeat | null>(null);
 
   // Per-song state keyed by videoId
   const [progressMap, setProgressMap] = useState<Record<string, ExtractionProgress>>({});
@@ -377,11 +385,19 @@ export default function Extractor() {
               </span>
             </div>
             <div className="flex flex-col gap-3">
-              {extracted.map((beat) => <ExtractedCard key={beat.id} beat={beat} />)}
+              {extracted.map((beat) => (
+                <ExtractedCard key={beat.id} beat={beat} onKaraoke={setKaraokeBeat} />
+              ))}
             </div>
           </section>
         )}
       </main>
+
+      <AnimatePresence>
+        {karaokeBeat && (
+          <KaraokeStudio beat={karaokeBeat} onClose={() => setKaraokeBeat(null)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
