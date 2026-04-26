@@ -94,3 +94,4 @@ let _logged = false;
 
 // Alias for backwards compatibility
 export const cookieArgs = authArgs;
+
