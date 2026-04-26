@@ -80,14 +80,17 @@ function resolveCookiePath(): string | null {
   return null;
 }
 
-// Eagerly resolve on module load so it's ready before the first request
-resolveCookiePath();
-
 /** Returns yt-dlp auth args to append to every download command. */
 export function authArgs(): string[] {
   const p = resolveCookiePath();
+  if (!_logged) {
+    _logged = true;
+    const envLen = process.env.YTDLP_COOKIES?.length ?? 0;
+    console.error(`[YTDLP] first auth call: cookiePath=${p ?? "NONE"} YTDLP_COOKIES_env_len=${envLen}`);
+  }
   return p ? ["--cookies", p] : [];
 }
+let _logged = false;
 
 // Alias for backwards compatibility
 export const cookieArgs = authArgs;
