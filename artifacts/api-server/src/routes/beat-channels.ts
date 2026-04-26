@@ -8,7 +8,7 @@ import { db, beatChannelsTable } from "@workspace/db";
 import { AddChannelBody, RemoveChannelParams } from "@workspace/api-zod";
 import { resolveChannelInfo, searchChannels, fetchRecentVideos } from "../lib/youtube";
 
-import { YTDLP_BIN as YTDLP, YTDLP_CACHE_DIR, cookieArgs } from "../lib/ytdlp";
+import { YTDLP_BIN as YTDLP, YTDLP_CACHE_DIR, ffmpegArgs, cookieArgs } from "../lib/ytdlp";
 
 // Pre-warm the EJS remote component cache at startup so the first real
 // download isn't slow. Run in background — never blocks the server.
@@ -212,22 +212,29 @@ router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
   const { videoId } = req.params;
   const rawTitle = typeof req.query.title === "string" ? req.query.title : videoId;
   const safeName = rawTitle.replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim().slice(0, 120) || videoId;
+  const startTime = typeof req.query.startTime === "string" ? req.query.startTime.trim() : undefined;
+  const endTime   = typeof req.query.endTime   === "string" ? req.query.endTime.trim()   : undefined;
+  const isClip = Boolean(startTime || endTime);
 
-  // Download the best audio in its native container (no ffmpeg conversion).
-  // yt-dlp names the file with the actual extension, so we use a unique prefix
-  // and then glob for whichever file it created.
+  // Build optional clip-section args
+  const sectionArgs: string[] = [];
+  if (isClip) {
+    const start = startTime || "0";
+    const end   = endTime   || "inf";
+    sectionArgs.push("--download-sections", `*${start}-${end}`, "--force-keyframes-at-cuts");
+  }
+
+  // Download the best audio in its native container.
   const tmpDir = os.tmpdir();
   const tmpBase = path.join(tmpDir, `tubefeed-${videoId}-${Date.now()}`);
-  // yt-dlp template: <tmpBase>.<ext>
   const tmpTemplate = `${tmpBase}.%(ext)s`;
 
-  const cleanup = (file: string) => { try { fs.unlinkSync(file); } catch (_) {} };
+  const cleanup = (file?: string) => { try { if (file) fs.unlinkSync(file); } catch (_) {} };
 
   try {
     await new Promise<void>((resolve, reject) => {
       const nodeExec = process.execPath;
       const ytdlp = spawn(YTDLP, [
-        // Download best audio in native format — no ffmpeg conversion step.
         "--format", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
         "-o", tmpTemplate,
         "--no-playlist",
@@ -235,6 +242,8 @@ router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
         "--js-runtimes", `node:${nodeExec}`,
         "--remote-components", "ejs:github",
         "--cache-dir", YTDLP_CACHE_DIR,
+        ...ffmpegArgs(),
+        ...sectionArgs,
         ...cookieArgs(),
         `https://www.youtube.com/watch?v=${videoId}`,
       ]);

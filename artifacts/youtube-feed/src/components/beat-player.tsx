@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   X, ChevronDown, ChevronUp, ExternalLink, Music2,
   Sparkles, Loader2, FileText, Download, CheckCircle2,
-  Mic, Square, Trash2, Cloud, CloudOff, ChevronsUpDown,
+  Mic, Square, Trash2, Cloud, CloudOff, ChevronsUpDown, Scissors,
 } from "lucide-react";
 import type { Video } from "@workspace/api-client-react";
 import { formatDuration } from "../lib/utils";
@@ -34,6 +34,9 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   const [lyrics, setLyrics] = useState("");
   const [downloadState, setDownloadState] = useState<DownloadState>("idle");
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [showClipPicker, setShowClipPicker] = useState(false);
+  const [clipStart, setClipStart] = useState("");
+  const [clipEnd, setClipEnd] = useState("");
 
   // Mic device selection
   const [micDevices, setMicDevices] = useState<{ deviceId: string; label: string }[]>([]);
@@ -206,7 +209,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     // When recording stops, stopVisualizer is called inside mr.onstop
   }, [recordState, drawVisualizer]);
 
-  // Reset recording & lyrics when beat changes
+  // Reset recording, lyrics, and download state when beat changes
   useEffect(() => {
     if (beat) {
       const saved = localStorage.getItem(LYRICS_KEY(beat.videoId)) ?? "";
@@ -214,6 +217,11 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
       setVideoExpanded(false);
       resetRecording();
       setTakeNumber(1);
+      setDownloadState("idle");
+      setDownloadError(null);
+      setShowClipPicker(false);
+      setClipStart("");
+      setClipEnd("");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beat?.videoId]);
@@ -266,12 +274,16 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     onBeatSelect(similar);
   }, [onBeatSelect]);
 
-  const handleDownload = useCallback(async () => {
+  const handleDownload = useCallback(async (startTime?: string, endTime?: string) => {
     if (!beat || downloadState === "downloading") return;
     setDownloadState("downloading");
+    setShowClipPicker(false);
     if (downloadTimerRef.current) clearTimeout(downloadTimerRef.current);
     try {
-      const url = `/api/beats/${beat.videoId}/download?title=${encodeURIComponent(beat.title)}`;
+      const params = new URLSearchParams({ title: beat.title });
+      if (startTime) params.set("startTime", startTime);
+      if (endTime)   params.set("endTime",   endTime);
+      const url = `/api/beats/${beat.videoId}/download?${params}`;
       const resp = await fetch(url);
       if (!resp.ok) {
         let msg = "Download failed";
@@ -282,7 +294,9 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
       const blobUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = blobUrl;
-      anchor.download = `${beat.title}.mp3`;
+      const isClip = Boolean(startTime || endTime);
+      const label = isClip ? ` (${startTime ?? "0:00"}-${endTime ?? "end"})` : "";
+      anchor.download = `${beat.title}${label}.m4a`;
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);
@@ -474,39 +488,110 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                     {/* Action buttons */}
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <div className="flex flex-col gap-1">
-                        <button
-                          onClick={handleDownload}
-                          disabled={downloadState === "downloading"}
-                          title={downloadState === "error" && downloadError ? downloadError : undefined}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
-                            downloadState === "done"
-                              ? "bg-green-500/10 text-green-400 border-green-500/20"
-                              : downloadState === "downloading"
-                              ? "bg-surface text-text-muted border-border cursor-not-allowed"
-                              : downloadState === "error"
-                              ? "bg-red-500/10 text-red-400 border-red-500/20"
-                              : "bg-surface hover:bg-surface-hover text-text-muted hover:text-text-main border-border hover:border-primary/30"
-                          }`}
-                        >
-                          {downloadState === "downloading" ? (
-                            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Preparing…</>
-                          ) : downloadState === "done" ? (
-                            <><CheckCircle2 className="w-3.5 h-3.5" />Downloaded!</>
-                          ) : downloadState === "error" ? (
-                            <><Download className="w-3.5 h-3.5" />Try Again</>
-                          ) : (
-                            <><Download className="w-3.5 h-3.5" />Download MP3</>
-                          )}
-                        </button>
-                        {downloadState === "error" && downloadError && (
-                          <p className="text-[10px] text-red-400 leading-tight max-w-[180px]">
-                            {downloadError.includes("bot") || downloadError.includes("Sign in")
-                              ? "YouTube blocked this download. Try another beat."
-                              : downloadError.length > 60
-                              ? downloadError.slice(0, 60) + "…"
-                              : downloadError}
-                          </p>
+                        {/* Download trigger / status */}
+                        {downloadState === "downloading" ? (
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border bg-surface text-text-muted border-border cursor-not-allowed">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />Preparing…
+                          </div>
+                        ) : downloadState === "done" ? (
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border bg-green-500/10 text-green-400 border-green-500/20">
+                              <CheckCircle2 className="w-3.5 h-3.5" />Downloaded!
+                            </span>
+                            <button
+                              onClick={() => { setDownloadState("idle"); setShowClipPicker(false); setClipStart(""); setClipEnd(""); }}
+                              className="text-[10px] text-text-muted hover:text-primary transition-colors"
+                            >
+                              Download another
+                            </button>
+                          </div>
+                        ) : downloadState === "error" ? (
+                          <div className="flex flex-col gap-1">
+                            <button
+                              onClick={() => { setDownloadState("idle"); setShowClipPicker(true); }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border bg-red-500/10 text-red-400 border-red-500/20"
+                            >
+                              <Download className="w-3.5 h-3.5" />Try Again
+                            </button>
+                            {downloadError && (
+                              <p className="text-[10px] text-red-400 leading-tight max-w-[180px]">
+                                {downloadError.includes("bot") || downloadError.includes("Sign in")
+                                  ? "YouTube blocked this download. Try another beat."
+                                  : downloadError.length > 60
+                                  ? downloadError.slice(0, 60) + "…"
+                                  : downloadError}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setShowClipPicker((v) => !v)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                              showClipPicker
+                                ? "bg-primary/10 text-primary border-primary/30"
+                                : "bg-surface hover:bg-surface-hover text-text-muted hover:text-text-main border-border hover:border-primary/30"
+                            }`}
+                          >
+                            <Download className="w-3.5 h-3.5" />Download MP3
+                          </button>
                         )}
+
+                        {/* Clip picker panel */}
+                        <AnimatePresence>
+                          {downloadState === "idle" && showClipPicker && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.15 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="mt-1 p-3 rounded-xl bg-surface border border-border space-y-2 w-64">
+                                <p className="text-xs font-semibold text-text-main flex items-center gap-1.5">
+                                  <Scissors className="w-3.5 h-3.5 text-primary" />
+                                  Select a time range — or leave blank for the full track
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex flex-col gap-1 flex-1">
+                                    <label className="text-[10px] text-text-muted uppercase tracking-widest font-semibold">Start</label>
+                                    <input
+                                      value={clipStart}
+                                      onChange={(e) => setClipStart(e.target.value)}
+                                      placeholder="e.g. 0:30"
+                                      className="h-7 px-2 bg-background border border-border rounded-lg text-text-main text-xs focus:outline-none focus:border-primary/50 transition-colors font-mono"
+                                    />
+                                  </div>
+                                  <span className="text-text-muted mt-4 text-xs">→</span>
+                                  <div className="flex flex-col gap-1 flex-1">
+                                    <label className="text-[10px] text-text-muted uppercase tracking-widest font-semibold">End</label>
+                                    <input
+                                      value={clipEnd}
+                                      onChange={(e) => setClipEnd(e.target.value)}
+                                      placeholder="e.g. 1:45"
+                                      className="h-7 px-2 bg-background border border-border rounded-lg text-text-main text-xs focus:outline-none focus:border-primary/50 transition-colors font-mono"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleDownload(clipStart || undefined, clipEnd || undefined)}
+                                    disabled={!clipStart && !clipEnd}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-all"
+                                  >
+                                    <Scissors className="w-3 h-3" />
+                                    Download Clip
+                                  </button>
+                                  <button
+                                    onClick={() => handleDownload()}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface-hover border border-border text-text-muted hover:text-text-main text-xs font-semibold rounded-lg transition-all"
+                                  >
+                                    Full Track
+                                  </button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
 
                       {/* Mic picker + Record button */}

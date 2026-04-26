@@ -1,0 +1,303 @@
+Skip to content
+yt-dlp
+yt-dlp
+Repository navigation
+Code
+Issues
+1.9k
+ (1.9k)
+Pull requests
+597
+ (597)
+Agents
+Actions
+Projects
+Wiki
+Security and quality
+8
+ (8)
+Insights
+[Critical Bug] --cookies-from-browser completely breaks downloading with specific rules #15330
+Closed
+Closed
+[Critical Bug] --cookies-from-browser completely breaks downloading with specific rules
+#15330
+@RiskiVR
+Description
+RiskiVR
+opened on Dec 16, 2025
+Checklist
+
+I'm reporting a bug unrelated to a specific site
+
+I've verified that I have updated yt-dlp to nightly or master (update instructions)
+
+I've searched known issues, the FAQ, and the bugtracker for similar issues including closed ones. DO NOT post duplicates
+
+I've read the policy against AI/LLM contributions and understand I may be blocked from the repository if it is violated
+Provide a description that is worded well enough to be understood
+I regularly use yt-dlp for downloading audio in personal projects, and I typically need to use --cookies-from-browser in order to not be blocked by YouTube. This used to work just fine a while back. However as of late, now it's been returning an error whenever I ask it for audio only or printing titles. It will give me Requested format is not available. Use --list-formats for a list of available formats. However, if I take away --cookies-from-browser, then it works just fine? What??
+
+Below I pasted two outputs. One of me downloading audio with --cookies-from-browser, and one without. You'll see the first one fails telling me my requested format is unavailable by somehow having --cookies-from-browser set.
+
+This also happens when attempting to print title from videos with --cookies-from-browser added. My current work around for printing titles is adding -f sb0 at the end, however I shouldn't need to do that since this wasn't a problem before, and it's still a problem with audio downloading with no solution currently.
+
+Provide verbose output that clearly demonstrates the problem
+
+Run your yt-dlp command with -vU flag added (yt-dlp -vU <your command line>)
+
+If using API, add 'verbose': True to YoutubeDL params instead
+
+Copy the WHOLE output (starting with [debug] Command-line config) and insert it below
+Complete Verbose Output
+PS U:\RiskiVR\Videos\yt-dlp> yt-dlp -x --audio-format mp3 https://www.youtube.com/watch?v=0LWHN2noJ-U --cookies-from-browser firefox -vU
+[debug] Command-line config: ['-x', '--audio-format', 'mp3', 'https://www.youtube.com/watch?v=0LWHN2noJ-U', '--cookies-from-browser', 'firefox', '-vU']
+[debug] Encodings: locale cp1252, fs utf-8, pref cp1252, out utf-8, error utf-8, screen utf-8
+[debug] yt-dlp version stable@2025.11.12 from yt-dlp/yt-dlp [335653be8] (win_exe)
+[debug] Python 3.10.11 (CPython AMD64 64bit) - Windows-10-10.0.22631-SP0 (OpenSSL 1.1.1t  7 Feb 2023)
+[debug] exe versions: ffmpeg N-118219-g551041e384-20250103 (setts), ffprobe N-118219-g551041e384-20250103
+[debug] Optional libraries: Cryptodome-3.23.0, brotli-1.2.0, certifi-2025.10.05, curl_cffi-0.13.0, mutagen-1.47.0, requests-2.32.5, sqlite3-3.40.1, urllib3-2.5.0, websockets-15.0.1, yt_dlp_ejs-0.3.1
+[debug] JS runtimes: none
+[debug] Proxy map: {}
+Extracting cookies from firefox
+[debug] Extracting cookies from: "C:\Users\RiskiVR\AppData\Roaming\Mozilla\Firefox\Profiles\62xzxw8o.default-release\cookies.sqlite"
+[debug] Firefox cookies database version: 17
+Extracted 1132 cookies from firefox
+[debug] Request Handlers: urllib, requests, websockets, curl_cffi
+[debug] Plugin directories: none
+[debug] Loaded 1844 extractors
+[debug] Fetching release info: https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest
+[debug] Downloading _update_spec from https://github.com/yt-dlp/yt-dlp/releases/latest/download/_update_spec
+[debug] Downloading SHA2-256SUMS from https://github.com/yt-dlp/yt-dlp/releases/download/2025.12.08/SHA2-256SUMS
+Current version: stable@2025.11.12 from yt-dlp/yt-dlp
+Latest version: stable@2025.12.08 from yt-dlp/yt-dlp
+Current Build Hash: 9f8b03a37125854895a7eebf50a605e34e7ec3bd2444931eff377f3ccec50e96
+Updating to stable@2025.12.08 from yt-dlp/yt-dlp ...
+[debug] Downloading yt-dlp.exe from https://github.com/yt-dlp/yt-dlp/releases/download/2025.12.08/yt-dlp.exe
+Updated yt-dlp to stable@2025.12.08 from yt-dlp/yt-dlp
+[debug] Restarting: "U:\Reinstall Files\PATH\yt-dlp\yt-dlp.exe" -x --audio-format mp3 "https://www.youtube.com/watch?v=0LWHN2noJ-U" --cookies-from-browser firefox -vU
+[debug] Command-line config: ['-x', '--audio-format', 'mp3', 'https://www.youtube.com/watch?v=0LWHN2noJ-U', '--cookies-from-browser', 'firefox', '-vU']
+[debug] Encodings: locale cp1252, fs utf-8, pref cp1252, out utf-8, error utf-8, screen utf-8
+[debug] yt-dlp version stable@2025.12.08 from yt-dlp/yt-dlp [7a52ff29d] (win_exe)
+[debug] Python 3.10.11 (CPython AMD64 64bit) - Windows-10-10.0.22631-SP0 (OpenSSL 1.1.1t  7 Feb 2023)
+[debug] exe versions: ffmpeg N-118219-g551041e384-20250103 (setts), ffprobe N-118219-g551041e384-20250103
+[debug] Optional libraries: Cryptodome-3.23.0, brotli-1.2.0, certifi-2025.11.12, curl_cffi-0.13.0, mutagen-1.47.0, requests-2.32.5, sqlite3-3.40.1, urllib3-2.6.0, websockets-15.0.1, yt_dlp_ejs-0.3.2
+[debug] JS runtimes: none
+[debug] Proxy map: {}
+Extracting cookies from firefox
+[debug] Extracting cookies from: "C:\Users\RiskiVR\AppData\Roaming\Mozilla\Firefox\Profiles\62xzxw8o.default-release\cookies.sqlite"
+[debug] Firefox cookies database version: 17
+Extracted 1132 cookies from firefox
+[debug] Request Handlers: urllib, requests, websockets, curl_cffi
+[debug] Plugin directories: none
+[debug] Loaded 1854 extractors
+[debug] Fetching release info: https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest
+Latest version: stable@2025.12.08 from yt-dlp/yt-dlp
+yt-dlp is up to date (stable@2025.12.08 from yt-dlp/yt-dlp)
+[debug] [youtube] Found YouTube account cookies
+[debug] [youtube] [pot] PO Token Providers: none
+[debug] [youtube] [pot] PO Token Cache Providers: memory
+[debug] [youtube] [pot] PO Token Cache Spec Providers: webpo
+[debug] [youtube] [jsc] JS Challenge Providers: bun (unavailable), deno (unavailable), node (unavailable), quickjs (unavailable)
+[youtube] Extracting URL: https://www.youtube.com/watch?v=0LWHN2noJ-U
+[youtube] 0LWHN2noJ-U: Downloading webpage
+[debug] [youtube] Detected YouTube Premium subscription
+[youtube] 0LWHN2noJ-U: Downloading tv downgraded player API JSON
+[youtube] 0LWHN2noJ-U: Downloading web creator player API JSON
+WARNING: [youtube] 0LWHN2noJ-U: Signature solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS
+WARNING: [youtube] 0LWHN2noJ-U: n challenge solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS
+WARNING: Only images are available for download. use --list-formats to see them
+[debug] Sort order given by extractor: quality, res, fps, hdr:12, source, vcodec, channels, acodec, lang, proto
+[debug] Formats sorted by: hasvid, ie_pref, quality, res, fps, hdr:12(7), source, vcodec, channels, acodec, lang, proto, size, br, asr, vext, aext, hasaud, id
+ERROR: [youtube] 0LWHN2noJ-U: Requested format is not available. Use --list-formats for a list of available formats
+Traceback (most recent call last):
+  File "yt_dlp\YoutubeDL.py", line 1696, in wrapper
+  File "yt_dlp\YoutubeDL.py", line 1852, in __extract_info
+  File "yt_dlp\YoutubeDL.py", line 1911, in process_ie_result
+  File "yt_dlp\YoutubeDL.py", line 3051, in process_video_result
+yt_dlp.utils.ExtractorError: [youtube] 0LWHN2noJ-U: Requested format is not available. Use --list-formats for a list of available formats
+
+PS U:\RiskiVR\Videos\yt-dlp> yt-dlp -x --audio-format mp3 https://www.youtube.com/watch?v=0LWHN2noJ-U -vU
+[debug] Command-line config: ['-x', '--audio-format', 'mp3', 'https://www.youtube.com/watch?v=0LWHN2noJ-U', '-vU']
+[debug] Encodings: locale cp1252, fs utf-8, pref cp1252, out utf-8, error utf-8, screen utf-8
+[debug] yt-dlp version stable@2025.12.08 from yt-dlp/yt-dlp [7a52ff29d] (win_exe)
+[debug] Python 3.10.11 (CPython AMD64 64bit) - Windows-10-10.0.22631-SP0 (OpenSSL 1.1.1t  7 Feb 2023)
+[debug] exe versions: ffmpeg N-118219-g551041e384-20250103 (setts), ffprobe N-118219-g551041e384-20250103
+[debug] Optional libraries: Cryptodome-3.23.0, brotli-1.2.0, certifi-2025.11.12, curl_cffi-0.13.0, mutagen-1.47.0, requests-2.32.5, sqlite3-3.40.1, urllib3-2.6.0, websockets-15.0.1, yt_dlp_ejs-0.3.2
+[debug] JS runtimes: none
+[debug] Proxy map: {}
+[debug] Request Handlers: urllib, requests, websockets, curl_cffi
+[debug] Plugin directories: none
+[debug] Loaded 1854 extractors
+[debug] Fetching release info: https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest
+Latest version: stable@2025.12.08 from yt-dlp/yt-dlp
+yt-dlp is up to date (stable@2025.12.08 from yt-dlp/yt-dlp)
+[debug] [youtube] [pot] PO Token Providers: none
+[debug] [youtube] [pot] PO Token Cache Providers: memory
+[debug] [youtube] [pot] PO Token Cache Spec Providers: webpo
+[debug] [youtube] [jsc] JS Challenge Providers: bun (unavailable), deno (unavailable), node (unavailable), quickjs (unavailable)
+[youtube] Extracting URL: https://www.youtube.com/watch?v=0LWHN2noJ-U
+[youtube] 0LWHN2noJ-U: Downloading webpage
+WARNING: [youtube] No supported JavaScript runtime could be found. Only deno is enabled by default; to use another runtime add  --js-runtimes RUNTIME[:PATH]  to your command/config. YouTube extraction without a JS runtime has been deprecated, and some formats may be missing. See  https://github.com/yt-dlp/yt-dlp/wiki/EJS  for details on installing one
+[youtube] 0LWHN2noJ-U: Downloading android sdkless player API JSON
+[youtube] 0LWHN2noJ-U: Downloading web safari player API JSON
+[debug] [youtube] 0LWHN2noJ-U: Detected a 6s ad skippable after 5s for web_safari
+WARNING: [youtube] 0LWHN2noJ-U: Some web_safari client https formats have been skipped as they are missing a url. YouTube is forcing SABR streaming for this client. See  https://github.com/yt-dlp/yt-dlp/issues/12482  for more details
+[youtube] 0LWHN2noJ-U: Downloading m3u8 information
+[debug] [youtube] 0LWHN2noJ-U: Detected experiment to bind GVS PO Token to video id.
+WARNING: [youtube] 0LWHN2noJ-U: Some web client https formats have been skipped as they are missing a url. YouTube is forcing SABR streaming for this client. See  https://github.com/yt-dlp/yt-dlp/issues/12482  for more details
+[debug] Sort order given by extractor: quality, res, fps, hdr:12, source, vcodec, channels, acodec, lang, proto
+[debug] Formats sorted by: hasvid, ie_pref, quality, res, fps, hdr:12(7), source, vcodec, channels, acodec, lang, proto, size, br, asr, vext, aext, hasaud, id
+[info] 0LWHN2noJ-U: Downloading 1 format(s): 251
+[debug] Invoking http downloader on "https://rr8---sn-8xgp1vo-p5qe7.googlevideo.com/videoplayback?expire=1765827888&ei=0BBAaaSAKfzKkucP7uvAsAw&ip=2600%3A4040%3A2e7f%3A5500%3A3ce8%3A1d19%3A66d0%3A5c0f&id=o-ADOD52Jg9I8I-1UbZUPuVVP6YErRz006BKJKzbSnpQH3&itag=251&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&met=1765806288%2C&mh=D0&mm=31%2C26&mn=sn-8xgp1vo-p5qe7%2Csn-ab5l6nrr&ms=au%2Conr&mv=m&mvi=8&pl=38&rms=au%2Cau&gcr=us&initcwndbps=3617500&bui=AYUSA3AxLluqtW4NECCYu82vg8ptY-7qZOzW4k0VBtyOYxggFghDRvKfp6uQ2cXsoJ-nXqNawCry9qn9&spc=wH4Qq5P8AFyB&vprv=1&svpuc=1&mime=audio%2Fwebm&rqh=1&gir=yes&clen=3805005&dur=259.241&lmt=1745738284168094&mt=1765805854&fvip=2&keepalive=yes&fexp=51552689%2C51565116%2C51565681%2C51580968&c=ANDROID&txp=5532534&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cgcr%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&sig=AJfQdSswRgIhALZCoO6SPvHmY61kTl9HR7x8coDNTlYMvNLK0d6yoIYuAiEAvZiNpZWGNjhZJJmHY8fnzAqtf2k3LGeg-XG1wD03ciU%3D&lsparams=met%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRgIhAL9JbBd0LwGHqzA8gzIB3OME62d09ETQIFJteHgdRblYAiEApIl43UHSiEZ8g89xdVCw7Dm0u8zkY5Nuk82xLz7T2xI%3D"
+[debug] File locking is not supported. Proceeding without locking
+[download] Destination: A Minecraft Movie Soundtrack ｜ I Feel Alive (Official Lyric Video) - Jack Black ｜ WaterTower Music [0LWHN2noJ-U].webm
+[download] 100% of    3.63MiB in 00:00:00 at 19.77MiB/s
+[debug] ffmpeg command line: ffprobe -show_streams "file:A Minecraft Movie Soundtrack ｜ I Feel Alive (Official Lyric Video) - Jack Black ｜ WaterTower Music [0LWHN2noJ-U].webm"
+[ExtractAudio] Destination: A Minecraft Movie Soundtrack ｜ I Feel Alive (Official Lyric Video) - Jack Black ｜ WaterTower Music [0LWHN2noJ-U].mp3
+[debug] ffmpeg command line: ffmpeg -y -loglevel repeat+info -i "file:A Minecraft Movie Soundtrack ｜ I Feel Alive (Official Lyric Video) - Jack Black ｜ WaterTower Music [0LWHN2noJ-U].webm" -vn -acodec libmp3lame -q:a 5.0 -movflags +faststart "file:A Minecraft Movie Soundtrack ｜ I Feel Alive (Official Lyric Video) - Jack Black ｜ WaterTower Music [0LWHN2noJ-U].mp3"
+Deleting original file A Minecraft Movie Soundtrack ｜ I Feel Alive (Official Lyric Video) - Jack Black ｜ WaterTower Music [0LWHN2noJ-U].webm (pass -k to keep)
+PS U:\RiskiVR\Videos\yt-dlp>
+Activity
+
+RiskiVR
+added 
+bug
+Bug that is not site-specific
+ 
+triage
+Untriaged issue
+ on Dec 16, 2025
+DTrombett
+DTrombett commented on Dec 16, 2025
+DTrombett
+on Dec 16, 2025 · edited by DTrombett
+Member
+No supported JavaScript runtime could be found. Only deno is enabled by default; to use another runtime add --js-runtimes RUNTIME[:PATH] to your command/config. YouTube extraction without a JS runtime has been deprecated, and some formats may be missing. See https://github.com/yt-dlp/yt-dlp/wiki/EJS for details on installing one
+
+You need a JavaScript runtime in order to solve the js challenges presented by YouTube, if you don't have one (supported ones are deno, node, bun, quickjs), install deno by running winget install DenoLand.Deno or check their installation page.
+
+For context: yes, this requirement was added recently due to frequent YouTube changes, without cookies some clients that don't support authentication are requested so you may still get some formats
+
+RiskiVR
+RiskiVR commented on Dec 16, 2025
+RiskiVR
+on Dec 16, 2025 · edited by RiskiVR
+Author
+Thanks for the quick response. I just installed DenoLand.Deno, and I was met with the same problem still:
+
+PS U:\RiskiVR\Videos\yt-dlp> yt-dlp -x --audio-format mp3 https://www.youtube.com/watch?v=0LWHN2noJ-U --cookies-from-browser firefox -vU
+[debug] Command-line config: ['-x', '--audio-format', 'mp3', 'https://www.youtube.com/watch?v=0LWHN2noJ-U', '--cookies-from-browser', 'firefox', '-vU']
+[debug] Encodings: locale cp1252, fs utf-8, pref cp1252, out utf-8, error utf-8, screen utf-8
+[debug] yt-dlp version stable@2025.12.08 from yt-dlp/yt-dlp [7a52ff29d] (win_exe)
+[debug] Python 3.10.11 (CPython AMD64 64bit) - Windows-10-10.0.22631-SP0 (OpenSSL 1.1.1t  7 Feb 2023)
+[debug] exe versions: ffmpeg N-118219-g551041e384-20250103 (setts), ffprobe N-118219-g551041e384-20250103
+[debug] Optional libraries: Cryptodome-3.23.0, brotli-1.2.0, certifi-2025.11.12, curl_cffi-0.13.0, mutagen-1.47.0, requests-2.32.5, sqlite3-3.40.1, urllib3-2.6.0, websockets-15.0.1, yt_dlp_ejs-0.3.2
+[debug] JS runtimes: none
+[debug] Proxy map: {}
+Extracting cookies from firefox
+[debug] Extracting cookies from: "C:\Users\RiskiVR\AppData\Roaming\Mozilla\Firefox\Profiles\62xzxw8o.default-release\cookies.sqlite"
+[debug] Firefox cookies database version: 17
+Extracted 1133 cookies from firefox
+[debug] Request Handlers: urllib, requests, websockets, curl_cffi
+[debug] Plugin directories: none
+[debug] Loaded 1854 extractors
+[debug] Fetching release info: https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest
+Latest version: stable@2025.12.08 from yt-dlp/yt-dlp
+yt-dlp is up to date (stable@2025.12.08 from yt-dlp/yt-dlp)
+[debug] [youtube] Found YouTube account cookies
+[debug] [youtube] [pot] PO Token Providers: none
+[debug] [youtube] [pot] PO Token Cache Providers: memory
+[debug] [youtube] [pot] PO Token Cache Spec Providers: webpo
+[debug] [youtube] [jsc] JS Challenge Providers: bun (unavailable), deno (unavailable), node (unavailable), quickjs (unavailable)
+[youtube] Extracting URL: https://www.youtube.com/watch?v=0LWHN2noJ-U
+[youtube] 0LWHN2noJ-U: Downloading webpage
+[debug] [youtube] Detected YouTube Premium subscription
+[youtube] 0LWHN2noJ-U: Downloading tv downgraded player API JSON
+[youtube] 0LWHN2noJ-U: Downloading web creator player API JSON
+WARNING: [youtube] 0LWHN2noJ-U: Signature solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS
+WARNING: [youtube] 0LWHN2noJ-U: n challenge solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS
+WARNING: Only images are available for download. use --list-formats to see them
+[debug] Sort order given by extractor: quality, res, fps, hdr:12, source, vcodec, channels, acodec, lang, proto
+[debug] Formats sorted by: hasvid, ie_pref, quality, res, fps, hdr:12(7), source, vcodec, channels, acodec, lang, proto, size, br, asr, vext, aext, hasaud, id
+ERROR: [youtube] 0LWHN2noJ-U: Requested format is not available. Use --list-formats for a list of available formats
+Traceback (most recent call last):
+  File "yt_dlp\YoutubeDL.py", line 1696, in wrapper
+  File "yt_dlp\YoutubeDL.py", line 1852, in __extract_info
+  File "yt_dlp\YoutubeDL.py", line 1911, in process_ie_result
+  File "yt_dlp\YoutubeDL.py", line 3051, in process_video_result
+yt_dlp.utils.ExtractorError: [youtube] 0LWHN2noJ-U: Requested format is not available. Use --list-formats for a list of available formats
+
+PS U:\RiskiVR\Videos\yt-dlp>
+DTrombett
+DTrombett commented on Dec 16, 2025
+DTrombett
+on Dec 16, 2025
+Member
+Did you restart the terminal after installing?
+
+RiskiVR
+RiskiVR commented on Dec 16, 2025
+RiskiVR
+on Dec 16, 2025
+Author
+Ah, my bad. Now it's all working, thank you so much.
+
+
+DTrombett
+added 
+question
+Question
+ and removed 
+bug
+Bug that is not site-specific
+ 
+triage
+Untriaged issue
+ on Dec 16, 2025
+
+DTrombett
+closed this as completedon Dec 16, 2025
+SimpleRoger
+Add a comment
+new Comment
+Markdown input: edit mode selected.
+Write
+Preview
+Use Markdown to format your comment
+Remember, contributions to this repository should follow its contributing guidelines.
+Metadata
+Assignees
+No one assigned
+Labels
+question
+Question
+Type
+No type
+Projects
+No projects
+Milestone
+No milestone
+Relationships
+None yet
+Development
+No branches or pull requests
+NotificationsCustomize
+You're not receiving notifications from this thread.
+
+Participants
+@RiskiVR
+@DTrombett
+Issue actions
+Footer
+© 2026 GitHub, Inc.
+Footer navigation
+Terms
+Privacy
+Security
+Status
+Community
+Docs
+Contact
+Manage cookies
+Do not share my personal information
