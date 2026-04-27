@@ -24,6 +24,18 @@ async function fetchJson<T>(url: string, opts?: RequestInit): Promise<T> {
   return r.json() as Promise<T>;
 }
 
+/** Programmatically trigger a browser file download without a visible button. */
+function triggerBrowserDownload(url: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  // Clean up after a short delay to let the click register
+  setTimeout(() => document.body.removeChild(a), 1000);
+}
+
 export function useVideoDownload() {
   const [state, setState] = useState<DlState>({ status: "idle", pct: 0, message: "" });
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -63,15 +75,31 @@ export function useVideoDownload() {
     pollRef.current = setInterval(async () => {
       try {
         const data = await fetchJson<DlState & { status: DlStatus }>(`${BASE}/api/video-download/job/${jobId}`);
-        setState({
-          status: data.status,
-          pct: data.pct,
-          message: data.message,
-          fileId: data.fileId,
-          filename: data.filename,
-          error: data.error,
-        });
-        if (data.status === "done" || data.status === "error") stopPoll();
+        if (data.status === "done" || data.status === "error") {
+          stopPoll();
+          setState({
+            status: data.status,
+            pct: data.pct,
+            message: data.message,
+            fileId: data.fileId,
+            filename: data.filename,
+            error: data.error,
+          });
+          // Auto-save as soon as the file is ready — no button click required
+          if (data.status === "done" && data.fileId && data.filename) {
+            const url = `${BASE}/api/video-download/file/${data.fileId}`;
+            triggerBrowserDownload(url, data.filename);
+          }
+        } else {
+          setState({
+            status: data.status,
+            pct: data.pct,
+            message: data.message,
+            fileId: data.fileId,
+            filename: data.filename,
+            error: data.error,
+          });
+        }
       } catch {
         /* ignore transient poll errors */
       }

@@ -78,7 +78,7 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [descExpanded, setDescExpanded] = useState(false);
-  const { state: dlState, start: startDownload, reset: resetDownload, downloadUrl } = useVideoDownload();
+  const { state: dlState, start: startDownload, reset: resetDownload } = useVideoDownload();
   const prevVideoId = useRef<string | null>(null);
   const [showDlPicker, setShowDlPicker] = useState(false);
   const [dlStart, setDlStart] = useState("");
@@ -302,21 +302,17 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
                     </div>
                   )}
 
-                  {dlState.status === "done" && downloadUrl && (
+                  {dlState.status === "done" && (
                     <div className="flex items-center gap-2">
-                      <a
-                        href={downloadUrl}
-                        download={dlState.filename ?? `${video.title}.mp4`}
-                        className="inline-flex items-center gap-1.5 text-xs text-green-400 hover:text-green-300 font-semibold transition-colors"
-                      >
+                      <span className="inline-flex items-center gap-1.5 text-xs text-green-400 font-semibold">
                         <CheckCircle className="w-3.5 h-3.5" />
-                        Save MP4
-                      </a>
+                        Saved to Downloads
+                      </span>
                       <button
                         onClick={() => { resetDownload(); setShowDlPicker(false); setDlStart(""); setDlEnd(""); }}
                         className="text-xs text-text-muted hover:text-primary transition-colors"
                       >
-                        Download another clip
+                        Download another
                       </button>
                     </div>
                   )}
