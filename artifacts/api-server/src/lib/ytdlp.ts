@@ -108,21 +108,37 @@ export const cookieArgs = authArgs;
  * known datacenter IP ranges regardless of cookies; a residential or shared
  * proxy from a different range bypasses this entirely.
  *
- * Get a free shared proxy at https://webshare.io (10 free proxies, no card).
- * Set the YTDLP_PROXY secret to the proxy URL shown in your Webshare dashboard.
+ * YTDLP_PROXY_LIST — comma-separated list of proxy URLs to rotate through.
+ * Each entry: http://user:pass@host:port  or  socks5://user:pass@host:port
+ * A random proxy is chosen per download for load distribution. If one IP gets
+ * flagged, subsequent downloads automatically use a different one.
+ *
+ * YTDLP_PROXY — single proxy fallback if YTDLP_PROXY_LIST is not set.
  */
+
+function pickProxy(): string | null {
+  const list = process.env.YTDLP_PROXY_LIST?.trim();
+  if (list) {
+    const proxies = list.split(",").map(p => p.trim()).filter(Boolean);
+    if (proxies.length) {
+      return proxies[Math.floor(Math.random() * proxies.length)];
+    }
+  }
+  return process.env.YTDLP_PROXY?.trim() ?? null;
+}
+
 export function serverArgs(): string[] {
   const args: string[] = [
     "--extractor-args", "youtube:player_js_variant=tv",
     "--impersonate", "chrome",
   ];
 
-  const proxy = process.env.YTDLP_PROXY?.trim();
+  const proxy = pickProxy();
   if (proxy) {
     args.push("--proxy", proxy);
     logger.info({ proxy: proxy.replace(/:[^:@]+@/, ":***@") }, "yt-dlp using proxy");
   } else {
-    logger.warn("YTDLP_PROXY not set — downloads may fail on production IPs");
+    logger.warn("YTDLP_PROXY_LIST not set — downloads may fail on production IPs");
   }
 
   return args;
