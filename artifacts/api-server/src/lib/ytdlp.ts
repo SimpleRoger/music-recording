@@ -101,9 +101,18 @@ export const cookieArgs = authArgs;
  * player_js_variant=tv — forces the TV player JavaScript for n-challenge solving.
  * YouTube player 4e51e895's "main"/"es5" variants break EJS (yt-dlp#15814);
  * the "tv" variant is unaffected. Deno (now installed via Nix) is auto-detected
- * by yt-dlp and used as the JS challenge solver — no --js-runtimes flag needed.
+ * by yt-dlp and used as the JS challenge solver.
+ *
+ * --impersonate chrome — uses curl_cffi (0.13.0 installed in .pythonlibs) to
+ * send a real Chrome TLS fingerprint. Without this, Replit's production server
+ * IPs are flagged by YouTube's bot detection and requests are rejected with
+ * "Sign in to confirm you're not a bot" even when valid cookies are provided.
+ * curl_cffi appears as a Request Handler when yt-dlp detects version 0.13.0.
  */
 export function serverArgs(): string[] {
-  return ["--extractor-args", "youtube:player_js_variant=tv"];
+  return [
+    "--extractor-args", "youtube:player_js_variant=tv",
+    "--impersonate", "chrome",
+  ];
 }
 
