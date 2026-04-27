@@ -8,7 +8,7 @@ import { db, beatChannelsTable } from "@workspace/db";
 import { AddChannelBody, RemoveChannelParams } from "@workspace/api-zod";
 import { resolveChannelInfo, searchChannels, fetchRecentVideos } from "../lib/youtube";
 
-import { getYtdlpBin, YTDLP_CACHE_DIR, ffmpegArgs, cookieArgs, serverArgs } from "../lib/ytdlp";
+import { getYtdlpBin, getFfmpegBin, YTDLP_CACHE_DIR, ffmpegArgs, cookieArgs, serverArgs } from "../lib/ytdlp";
 
 const router: IRouter = Router();
 
@@ -197,22 +197,22 @@ router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
   const endTime   = typeof req.query.endTime   === "string" ? req.query.endTime.trim()   : undefined;
   const isClip = Boolean(startTime || endTime);
 
-  // Build optional clip-section args
-  const sectionArgs: string[] = [];
-  if (isClip) {
-    const start = startTime || "0";
-    const end   = endTime   || "inf";
-    sectionArgs.push("--download-sections", `*${start}-${end}`, "--force-keyframes-at-cuts");
-  }
-
-  // Download the best audio in its native container.
   const tmpDir = os.tmpdir();
-  const tmpBase = path.join(tmpDir, `tubefeed-${videoId}-${Date.now()}`);
+  const stamp = Date.now();
+  const tmpBase = path.join(tmpDir, `tubefeed-${videoId}-${stamp}`);
   const tmpTemplate = `${tmpBase}.%(ext)s`;
 
-  const cleanup = (file?: string) => { try { if (file) fs.unlinkSync(file); } catch (_) {} };
+  const cleanup = (...files: string[]) => {
+    for (const f of files) { try { fs.unlinkSync(f); } catch (_) {} }
+  };
+
+  let fullFile: string | null = null;
+  let clipFile: string | null = null;
 
   try {
+    // Step 1: Download full audio — no --download-sections so the request goes through
+    // the same proxy/cookie path that works for regular beat downloads.
+    // Clips are trimmed in Step 2 with ffmpeg after a successful full download.
     await new Promise<void>((resolve, reject) => {
       const ytdlp = spawn(getYtdlpBin(), [
         "--format", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
@@ -222,7 +222,6 @@ router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
         "--cache-dir", YTDLP_CACHE_DIR,
         ...serverArgs(),
         ...ffmpegArgs(),
-        ...sectionArgs,
         ...cookieArgs(),
         `https://www.youtube.com/watch?v=${videoId}`,
       ]);
@@ -246,24 +245,61 @@ router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
 
     // Find the file yt-dlp wrote (extension is unknown ahead of time)
     const entries = fs.readdirSync(tmpDir).filter(f => f.startsWith(path.basename(tmpBase)));
-    const outFile = entries.length > 0 ? path.join(tmpDir, entries[0]) : null;
+    fullFile = entries.length > 0 ? path.join(tmpDir, entries[0]) : null;
 
-    if (!outFile || !fs.existsSync(outFile)) {
+    if (!fullFile || !fs.existsSync(fullFile)) {
       res.status(500).json({ error: "Download produced no output" });
       return;
     }
 
+    // Step 2: Trim with ffmpeg directly if a clip range was requested.
+    // Using ffmpeg directly is more reliable than yt-dlp's --download-sections
+    // because it operates on the already-downloaded file with no YouTube involvement.
+    let outFile = fullFile;
+    if (isClip) {
+      const ffmpegBin = getFfmpegBin();
+      if (!ffmpegBin) {
+        cleanup(fullFile);
+        res.status(500).json({ error: "ffmpeg not available — clip trimming requires ffmpeg" });
+        return;
+      }
+
+      const ext = path.extname(fullFile);
+      clipFile = `${tmpBase}-clip${ext}`;
+
+      const ffArgs = ["-y", "-i", fullFile];
+      if (startTime) ffArgs.push("-ss", startTime);
+      if (endTime)   ffArgs.push("-to", endTime);
+      // Copy codec — no re-encode, fast and lossless
+      ffArgs.push("-c", "copy", clipFile);
+
+      await new Promise<void>((resolve, reject) => {
+        const ff = spawn(ffmpegBin, ffArgs);
+        const errLines: string[] = [];
+        ff.stderr.on("data", (chunk: Buffer) => errLines.push(chunk.toString()));
+        ff.on("error", reject);
+        ff.on("close", (code) => {
+          if (code !== 0) reject(new Error(`ffmpeg exited ${code}: ${errLines.slice(-3).join(" | ")}`));
+          else resolve();
+        });
+        req.on("close", () => { ff.kill("SIGTERM"); reject(new Error("client disconnected")); });
+      });
+
+      // Done with the full download now
+      cleanup(fullFile);
+      fullFile = null;
+      outFile = clipFile;
+    }
+
+    // Step 3: Stream the file (full or clipped) to the client
     const ext = path.extname(outFile).replace(".", "").toLowerCase();
-    const mime = AUDIO_MIME[ext] ?? "application/octet-stream";
-    const dlName = `${safeName}.${ext}`;
-    // RFC 5987: Content-Disposition headers only allow ASCII in the quoted
-    // filename token. Strip non-ASCII chars for the fallback and use
-    // filename*=UTF-8'' percent-encoding so browsers with Unicode support
-    // (Chrome, Firefox, Safari) get the full title.
+    const label = isClip ? ` (${startTime ?? "start"}-${endTime ?? "end"})` : "";
+    const dlName = `${safeName}${label}.${ext}`;
     const asciiName = dlName.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "");
     const encodedName = encodeURIComponent(dlName).replace(/'/g, "%27");
 
     const stat = fs.statSync(outFile);
+    const mime = AUDIO_MIME[ext] ?? "application/octet-stream";
     res.setHeader("Content-Type", mime);
     res.setHeader(
       "Content-Disposition",
@@ -281,7 +317,8 @@ router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
       if (!res.writableEnded) res.end();
     });
   } catch (err: unknown) {
-    cleanup();
+    if (fullFile) cleanup(fullFile);
+    if (clipFile) cleanup(clipFile);
     const msg = err instanceof Error ? err.message : "Download failed";
     if (msg === "client disconnected") return;
     req.log?.error({ err, videoId }, "beat download failed");
