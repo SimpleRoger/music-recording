@@ -9,7 +9,7 @@ import { execFileSync, execSync } from "child_process";
 // In production, .pythonlibs is NOT tracked in git.  We pip-install yt-dlp +
 // curl_cffi at startup so they exist before any download request arrives.
 (function ensurePythonDeps() {
-  const packages = ["yt-dlp==2026.03.17", "curl_cffi==0.13.0"];
+  const packages = ["yt-dlp==2026.03.17", "curl_cffi==0.13.0", "imageio-ffmpeg"];
 
   let installed = false;
   for (const pip of ["pip", "pip3"]) {
@@ -81,11 +81,21 @@ import { execFileSync, execSync } from "child_process";
         ffFound = execSync("which ffmpeg", { encoding: "utf8", timeout: 5000 }).trim() || null;
       } catch {}
     }
+    // imageio-ffmpeg bundles a static ffmpeg binary — use it as last resort
+    if (!ffFound) {
+      try {
+        ffFound = execSync(
+          "python3 -c \"import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())\"",
+          { encoding: "utf8", timeout: 10_000 }
+        ).trim() || null;
+        if (ffFound) console.log(`[startup] ffmpeg via imageio-ffmpeg: ${ffFound}`);
+      } catch {}
+    }
     if (ffFound) {
       process.env["FFMPEG_PATH"] = ffFound;
       console.log(`[startup] FFMPEG_PATH set to ${ffFound}`);
     } else {
-      console.warn("[startup] ffmpeg not found — video merging may fail");
+      console.warn("[startup] ffmpeg not found — clips/merging will fail");
     }
   }
 })();
