@@ -40,11 +40,19 @@ setInterval(() => {
 }, 10 * 60 * 1000);
 
 // ── Quality selection ────────────────────────────────────────────────────────
-// Prefer native 1080p mp4+m4a merged by ffmpeg; fall back to best progressive
+// Priority:
+//  1. Best 1080p mp4 video + m4a audio (AAC) — merged by ffmpeg; AAC is
+//     natively compatible with the MP4 container so no transcoding needed.
+//  2. Best ≤1080p video + m4a audio (any video codec).
+//  3. Best combined single-file format ≤1080p (progressive, includes audio).
+//  4. Absolute fallback.
+//
+// We avoid bestaudio without ext=m4a to prevent opus-in-mp4 issues (opus in
+// an MP4 container is not widely supported and can result in silent video).
 const FORMAT_1080 = [
   "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]",
-  "bestvideo[height<=1080]+bestaudio",
-  "best[height<=1080][ext=mp4]",
+  "bestvideo[height<=1080]+bestaudio[ext=m4a]",
+  "best[height<=1080]",
   "best",
 ].join("/");
 

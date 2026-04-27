@@ -62,6 +62,32 @@ import { execFileSync, execSync } from "child_process";
       console.warn("[startup] yt-dlp binary not found in known paths — will rely on PATH");
     }
   }
+
+  // Discover ffmpeg and set FFMPEG_PATH so getFfmpegBin() returns it at
+  // request time (lazy resolution in ytdlp.ts picks up this env var).
+  if (!process.env["FFMPEG_PATH"]) {
+    const ffmpegCandidates = [
+      "/usr/bin/ffmpeg",
+      "/usr/local/bin/ffmpeg",
+      "/home/runner/.local/bin/ffmpeg",
+    ];
+    const { existsSync } = require("fs") as typeof import("fs");
+    let ffFound: string | null = null;
+    for (const c of ffmpegCandidates) {
+      if (existsSync(c)) { ffFound = c; break; }
+    }
+    if (!ffFound) {
+      try {
+        ffFound = execSync("which ffmpeg", { encoding: "utf8", timeout: 5000 }).trim() || null;
+      } catch {}
+    }
+    if (ffFound) {
+      process.env["FFMPEG_PATH"] = ffFound;
+      console.log(`[startup] FFMPEG_PATH set to ${ffFound}`);
+    } else {
+      console.warn("[startup] ffmpeg not found — video merging may fail");
+    }
+  }
 })();
 
 // ── App (imported AFTER env setup above) ─────────────────────────────────────

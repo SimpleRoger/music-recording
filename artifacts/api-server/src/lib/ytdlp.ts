@@ -47,22 +47,40 @@ export const YTDLP_CACHE_DIR =
   path.resolve(__dirname, "../../../.ytdlp-cache");
 
 // ── ffmpeg ────────────────────────────────────────────────────────────────────
-function resolveFfmpegDir(): string {
-  if (process.env.FFMPEG_PATH) return path.dirname(process.env.FFMPEG_PATH);
-  const candidates = ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"];
+function resolveFfmpegBin(): string {
+  if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH))
+    return process.env.FFMPEG_PATH;
+
+  const candidates = [
+    "/usr/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg",
+    "/home/runner/.local/bin/ffmpeg",
+    // Replit runtime nix path (symlinked into PATH, check via which)
+  ];
   for (const c of candidates) {
-    if (fs.existsSync(c)) return path.dirname(c);
+    if (fs.existsSync(c)) return c;
   }
   try {
     const { execSync } = require("child_process");
-    const bin = execSync("which ffmpeg", { encoding: "utf8" }).trim();
-    if (bin) return path.dirname(bin);
+    const bin = execSync("which ffmpeg", { encoding: "utf8", timeout: 5000 }).trim();
+    if (bin) return bin;
   } catch {}
   return "";
 }
-export const FFMPEG_DIR = resolveFfmpegDir();
-export const ffmpegArgs = (): string[] =>
-  FFMPEG_DIR ? ["--ffmpeg-location", FFMPEG_DIR] : [];
+
+// Lazy getter — evaluated at spawn time so startup env changes (FFMPEG_PATH)
+// are reflected, and the module-load-time PATH race is avoided.
+export function getFfmpegBin(): string {
+  if (process.env.FFMPEG_PATH) return process.env.FFMPEG_PATH;
+  return resolveFfmpegBin();
+}
+
+/** @deprecated kept for build compat — use getFfmpegBin() instead */
+export const FFMPEG_DIR = resolveFfmpegBin() ? path.dirname(resolveFfmpegBin()) : "";
+export const ffmpegArgs = (): string[] => {
+  const bin = getFfmpegBin();
+  return bin ? ["--ffmpeg-location", path.dirname(bin)] : [];
+};
 
 // ── Authentication ────────────────────────────────────────────────────────────
 // YouTube requires browser cookies for server-side yt-dlp downloads.
