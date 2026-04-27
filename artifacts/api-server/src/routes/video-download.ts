@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import path from "path";
 import fs from "fs";
 import os from "os";
+import { logger } from "../lib/logger";
 import { YTDLP_BIN as YTDLP, YTDLP_CACHE_DIR, FFMPEG_DIR, ffmpegArgs, cookieArgs, serverArgs } from "../lib/ytdlp";
 
 const router: IRouter = Router();
@@ -89,8 +90,11 @@ async function runDownload(
         url,
       ]);
 
+      const stderrLines: string[] = [];
+
       child.stderr.on("data", (buf: Buffer) => {
         const text = buf.toString();
+        stderrLines.push(text.trim());
         // yt-dlp progress lines: "[download]  42.5% of ~100MiB..."
         const m = text.match(/\[download\]\s+([\d.]+)%/);
         if (m) {
@@ -105,6 +109,7 @@ async function runDownload(
 
       child.stdout.on("data", (buf: Buffer) => {
         const text = buf.toString();
+        stderrLines.push(text.trim());
         const m = text.match(/\[download\]\s+([\d.]+)%/);
         if (m) {
           const pct = Math.round(parseFloat(m[1]));
@@ -115,7 +120,10 @@ async function runDownload(
 
       child.on("close", (code) => {
         if (code === 0) resolve();
-        else reject(new Error(`yt-dlp exited with code ${code}`));
+        else {
+          const detail = stderrLines.filter(Boolean).slice(-5).join(" | ");
+          reject(new Error(`yt-dlp exited ${code}: ${detail}`));
+        }
       });
       child.on("error", reject);
     });
@@ -136,6 +144,7 @@ async function runDownload(
   } catch (err: any) {
     // Clean up
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    logger.error({ videoId, err }, "video download failed");
     job.status = "error";
     job.error = err.message ?? "Download failed";
   }
