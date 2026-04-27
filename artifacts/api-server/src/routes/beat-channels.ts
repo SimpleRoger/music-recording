@@ -8,26 +8,7 @@ import { db, beatChannelsTable } from "@workspace/db";
 import { AddChannelBody, RemoveChannelParams } from "@workspace/api-zod";
 import { resolveChannelInfo, searchChannels, fetchRecentVideos } from "../lib/youtube";
 
-import { YTDLP_BIN as YTDLP, YTDLP_CACHE_DIR, ffmpegArgs, cookieArgs } from "../lib/ytdlp";
-
-// Pre-warm the EJS remote component cache at startup so the first real
-// download isn't slow. Run in background — never blocks the server.
-function warmEjsCache() {
-  const nodeExec = process.execPath;
-  const args = [
-    "--simulate",
-    "--quiet",
-    "--no-warnings",
-    "--js-runtimes", `node:${nodeExec}`,
-    "--remote-components", "ejs:github",
-    "--cache-dir", YTDLP_CACHE_DIR,
-    ...cookieArgs(),
-    "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-  ];
-  const p = spawn(YTDLP, args, { stdio: "ignore" });
-  p.on("close", (_code) => {});
-}
-warmEjsCache();
+import { YTDLP_BIN as YTDLP, YTDLP_CACHE_DIR, ffmpegArgs, cookieArgs, serverArgs } from "../lib/ytdlp";
 
 const router: IRouter = Router();
 
@@ -233,15 +214,13 @@ router.get("/beats/:videoId/download", async (req, res): Promise<void> => {
 
   try {
     await new Promise<void>((resolve, reject) => {
-      const nodeExec = process.execPath;
       const ytdlp = spawn(YTDLP, [
         "--format", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
         "-o", tmpTemplate,
         "--no-playlist",
         "--no-warnings",
-        "--js-runtimes", `node:${nodeExec}`,
-        "--remote-components", "ejs:github",
         "--cache-dir", YTDLP_CACHE_DIR,
+        ...serverArgs(),
         ...ffmpegArgs(),
         ...sectionArgs,
         ...cookieArgs(),

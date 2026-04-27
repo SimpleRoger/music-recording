@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { YTDLP_BIN as YTDLP, YTDLP_CACHE_DIR, FFMPEG_DIR, ffmpegArgs, cookieArgs } from "../lib/ytdlp";
+import { YTDLP_BIN as YTDLP, YTDLP_CACHE_DIR, FFMPEG_DIR, ffmpegArgs, cookieArgs, serverArgs } from "../lib/ytdlp";
 
 const router: IRouter = Router();
 
@@ -77,6 +77,7 @@ async function runDownload(
       const child = spawn(YTDLP, [
         "--cache-dir", YTDLP_CACHE_DIR,
         "--no-playlist",
+        ...serverArgs(),
         ...ffmpegArgs(),
         "--format", FORMAT_1080,
         "--merge-output-format", "mp4",

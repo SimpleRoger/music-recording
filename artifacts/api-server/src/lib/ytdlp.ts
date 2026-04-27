@@ -96,19 +96,14 @@ let _logged = false;
 export const cookieArgs = authArgs;
 
 /**
- * Extra yt-dlp args applied to every download:
- *  - player_js_variant=tv   forces the YouTube TV player JS for challenge solving.
- *    The "main" variant of player 4e51e895 broke EJS 0.4.0 (yt-dlp#15814). The
- *    tv variant is unaffected and solves n-challenges without errors.
- *  - impersonate=chrome      uses curl_cffi to send a real Chrome TLS fingerprint,
- *    which bypasses YouTube's IP-based bot detection on datacenter/server IPs.
- *    Without this, even valid cookies are rejected with "Sign in to confirm you're
- *    not a bot" when the request originates from a cloud server IP.
+ * Extra yt-dlp args applied to every YouTube download.
+ *
+ * player_js_variant=tv — forces the TV player JavaScript for n-challenge solving.
+ * YouTube player 4e51e895's "main"/"es5" variants break EJS (yt-dlp#15814);
+ * the "tv" variant is unaffected. Deno (now installed via Nix) is auto-detected
+ * by yt-dlp and used as the JS challenge solver — no --js-runtimes flag needed.
  */
 export function serverArgs(): string[] {
-  return [
-    "--extractor-args", "youtube:player_js_variant=tv",
-    "--impersonate", "chrome",
-  ];
+  return ["--extractor-args", "youtube:player_js_variant=tv"];
 }
 

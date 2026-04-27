@@ -9,7 +9,7 @@ import { db, extractedBeatsTable } from "@workspace/db";
 import { searchVideos } from "../lib/youtube";
 import { objectStorageClient } from "../lib/objectStorage";
 
-import { YTDLP_BIN as YTDLP, YTDLP_CACHE_DIR, cookieArgs } from "../lib/ytdlp";
+import { YTDLP_BIN as YTDLP, YTDLP_CACHE_DIR, cookieArgs, serverArgs } from "../lib/ytdlp";
 
 const router: IRouter = Router();
 
@@ -86,7 +86,7 @@ async function downloadAudio(videoId: string, outDir: string, opts: RunOpts = {}
     await runProcess(YTDLP, [
       "--cache-dir", YTDLP_CACHE_DIR,
       "--no-playlist", "--simulate", "--no-warnings",
-      ...cookieArgs(), url,
+      ...serverArgs(), ...cookieArgs(), url,
     ], { ...opts, timeoutMs: 30_000 });
   } catch (e: any) {
     const msg = e.message ?? "";
@@ -104,7 +104,7 @@ async function downloadAudio(videoId: string, outDir: string, opts: RunOpts = {}
     "--cache-dir", YTDLP_CACHE_DIR, "--no-playlist",
     "--format", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
     "--no-warnings", "-o", path.join(outDir, "%(id)s.%(ext)s"),
-    ...cookieArgs(), url,
+    ...serverArgs(), ...cookieArgs(), url,
   ], { ...opts, timeoutMs: 3 * 60 * 1000 });
 
   const files = fs.readdirSync(outDir).filter((f) => f.startsWith(videoId));
