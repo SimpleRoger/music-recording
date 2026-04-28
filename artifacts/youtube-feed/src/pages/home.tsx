@@ -162,10 +162,10 @@ export default function Home() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium select-none"
-                title="Searches locked after 10:00 PM"
+                title="Searches locked 10pm–7am"
               >
                 <MoonStar className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden sm:inline">Locked 10:00 PM</span>
+                <span className="hidden sm:inline">Locked 10pm–7am</span>
               </motion.div>
             ) : (
               <motion.button
