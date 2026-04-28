@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { Plus, Music2, AlertCircle, RefreshCw, Tv2, FileText, Search, X, SlidersHorizontal, Loader2, Mic, Bookmark, Wand2, MoonStar } from "lucide-react";
-import { BedtimeButton } from "../components/bedtime-button";
 import { useBedtime } from "../hooks/use-bedtime";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBeats, useSearchBeats, type BeatSortOrder } from "../hooks/use-beats";
@@ -27,7 +26,7 @@ export default function Beats() {
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { isLocked, cutoffLabel } = useBedtime();
+  const { isLocked } = useBedtime();
 
   const { data: channels } = useBeatChannels();
   const { data: beats, isLoading: beatsLoading, isError, refetch } = useBeats(selectedChannelId);
@@ -97,7 +96,6 @@ export default function Beats() {
             </Link>
           </nav>
         </div>
-        <BedtimeButton />
       </header>
 
       {/* Sidebar + content */}
@@ -166,7 +164,7 @@ export default function Beats() {
             {isLocked ? (
               <div className="flex items-center gap-2.5 w-full pl-4 pr-4 py-3 bg-indigo-500/8 border border-indigo-500/20 rounded-xl text-indigo-400 text-sm select-none">
                 <MoonStar className="w-4 h-4 shrink-0" />
-                <span>Beat search is locked after {cutoffLabel} — go get some sleep!</span>
+                <span>Beat search is locked after 10:00 PM — go get some sleep!</span>
               </div>
             ) : (
               <div className="relative">

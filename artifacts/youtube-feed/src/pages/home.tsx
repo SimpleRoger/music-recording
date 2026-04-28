@@ -4,7 +4,6 @@ import {
   Plus, Youtube, AlertCircle, RefreshCw, Music2, FileText,
   Mic, Clock, Flame, Bookmark, Wand2, Search, X, Loader2, MoonStar,
 } from "lucide-react";
-import { BedtimeButton } from "../components/bedtime-button";
 import { useBedtime } from "../hooks/use-bedtime";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "../lib/utils";
@@ -30,7 +29,7 @@ export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { state: searchState, search, clear: clearSearch } = useVideoSearch();
 
-  const { isLocked, cutoffLabel } = useBedtime();
+  const { isLocked } = useBedtime();
 
   const { data: channels } = useChannels();
   const { data: videos, isLoading: isVideosLoading, isError, error, refetch } = useVideos(selectedChannelId, order);
@@ -163,10 +162,10 @@ export default function Home() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium select-none"
-                title={`Searches locked after ${cutoffLabel}`}
+                title="Searches locked after 10:00 PM"
               >
                 <MoonStar className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden sm:inline">Locked {cutoffLabel}</span>
+                <span className="hidden sm:inline">Locked 10:00 PM</span>
               </motion.div>
             ) : (
               <motion.button
@@ -182,8 +181,6 @@ export default function Home() {
               </motion.button>
             )}
           </AnimatePresence>
-
-          <BedtimeButton />
 
           <button
             onClick={() => setIsAddModalOpen(true)}
