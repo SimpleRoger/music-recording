@@ -103,10 +103,17 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
 
   const isOpen = video !== null;
 
+  // Load cached analysis from localStorage when the video changes
   useEffect(() => {
-    setResult(null);
     setSummaryError(null);
     setDescExpanded(false);
+    if (!video?.videoId) { setResult(null); return; }
+    try {
+      const cached = localStorage.getItem(`tubefeed-analysis-${video.videoId}`);
+      setResult(cached ? JSON.parse(cached) : null);
+    } catch {
+      setResult(null);
+    }
   }, [video?.videoId]);
 
   useEffect(() => {
@@ -146,22 +153,25 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
         throw new Error(data.error || "Failed to generate summary");
       }
       const data = await resp.json();
-      if (data.structured) {
-        setResult({
-          structured: data.structured,
-          transcriptUsed: data.transcriptUsed ?? false,
-          transcriptFailReason: data.transcriptFailReason ?? null,
-        });
-      } else {
-        setResult({
-          transcriptUsed: false,
-          transcriptFailReason: null,
-          structured: {
-            tldr: "", overview: data.summary ?? "", topicsCovered: [],
-            keyTakeaways: [], notableDetails: [], audience: "", verdict: "",
-          },
-        });
-      }
+      const newResult: SummaryResult = data.structured
+        ? {
+            structured: data.structured,
+            transcriptUsed: data.transcriptUsed ?? false,
+            transcriptFailReason: data.transcriptFailReason ?? null,
+          }
+        : {
+            transcriptUsed: false,
+            transcriptFailReason: null,
+            structured: {
+              tldr: "", overview: data.summary ?? "", topicsCovered: [],
+              keyTakeaways: [], notableDetails: [], audience: "", verdict: "",
+            },
+          };
+      setResult(newResult);
+      // Cache so we never have to regenerate for the same video
+      try {
+        localStorage.setItem(`tubefeed-analysis-${video.videoId}`, JSON.stringify(newResult));
+      } catch { /* storage full — ignore */ }
     } catch (err: any) {
       setSummaryError(err.message || "Something went wrong");
     } finally {
