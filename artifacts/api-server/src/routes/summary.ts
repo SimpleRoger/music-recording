@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
+import { eq } from "drizzle-orm";
 import { GetVideoSummaryBody } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { db, videoAnalysesTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -56,8 +58,29 @@ async function fetchTranscript(videoId: string): Promise<TranscriptResult> {
   }
 }
 
-// ── Route ────────────────────────────────────────────────────────────────────
+// ── Routes ───────────────────────────────────────────────────────────────────
 
+// GET /videos/summary/:videoId — return cached analysis from DB (or 404)
+router.get("/videos/summary/:videoId", async (req, res): Promise<void> => {
+  const { videoId } = req.params;
+  const [row] = await db
+    .select()
+    .from(videoAnalysesTable)
+    .where(eq(videoAnalysesTable.videoId, videoId));
+
+  if (!row) {
+    res.status(404).json({ error: "No cached analysis for this video" });
+    return;
+  }
+
+  res.json({
+    structured: row.structured,
+    transcriptUsed: row.transcriptUsed === "true",
+    transcriptFailReason: row.transcriptFailReason ?? null,
+  });
+});
+
+// POST /videos/summary — generate (or re-generate) analysis and persist to DB
 router.post("/videos/summary", async (req, res): Promise<void> => {
   const parsed = GetVideoSummaryBody.safeParse(req.body);
   if (!parsed.success) {
@@ -153,19 +176,40 @@ Rules:
     return;
   }
 
+  const structured = {
+    tldr: data.tldr ?? "",
+    overview: data.overview ?? "",
+    topicsCovered: Array.isArray(data.topicsCovered) ? data.topicsCovered : [],
+    keyTakeaways: Array.isArray(data.keyTakeaways) ? data.keyTakeaways : [],
+    notableDetails: Array.isArray(data.notableDetails) ? data.notableDetails : [],
+    audience: data.audience ?? "",
+    verdict: data.verdict ?? "",
+  };
+
+  // Persist to DB (upsert so regeneration overwrites the old result)
+  await db
+    .insert(videoAnalysesTable)
+    .values({
+      videoId,
+      structured,
+      transcriptUsed: String(transcriptUsed),
+      transcriptFailReason: transcriptFailReason ?? null,
+    })
+    .onConflictDoUpdate({
+      target: videoAnalysesTable.videoId,
+      set: {
+        structured,
+        transcriptUsed: String(transcriptUsed),
+        transcriptFailReason: transcriptFailReason ?? null,
+        createdAt: new Date(),
+      },
+    });
+
   res.json({
     summary: data.overview ?? data.tldr ?? "",
     transcriptUsed,
     transcriptFailReason,
-    structured: {
-      tldr: data.tldr ?? "",
-      overview: data.overview ?? "",
-      topicsCovered: Array.isArray(data.topicsCovered) ? data.topicsCovered : [],
-      keyTakeaways: Array.isArray(data.keyTakeaways) ? data.keyTakeaways : [],
-      notableDetails: Array.isArray(data.notableDetails) ? data.notableDetails : [],
-      audience: data.audience ?? "",
-      verdict: data.verdict ?? "",
-    },
+    structured,
   });
 });
 

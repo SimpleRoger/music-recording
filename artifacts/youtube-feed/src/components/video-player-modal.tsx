@@ -103,17 +103,24 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
 
   const isOpen = video !== null;
 
-  // Load cached analysis from localStorage when the video changes
+  // Auto-load cached analysis from DB when the video changes
   useEffect(() => {
     setSummaryError(null);
     setDescExpanded(false);
-    if (!video?.videoId) { setResult(null); return; }
-    try {
-      const cached = localStorage.getItem(`tubefeed-analysis-${video.videoId}`);
-      setResult(cached ? JSON.parse(cached) : null);
-    } catch {
-      setResult(null);
-    }
+    setResult(null);
+    if (!video?.videoId) return;
+    fetch(`/api/videos/summary/${video.videoId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.structured) {
+          setResult({
+            structured: data.structured,
+            transcriptUsed: data.transcriptUsed ?? false,
+            transcriptFailReason: data.transcriptFailReason ?? null,
+          });
+        }
+      })
+      .catch(() => {});
   }, [video?.videoId]);
 
   useEffect(() => {
@@ -168,10 +175,6 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
             },
           };
       setResult(newResult);
-      // Cache so we never have to regenerate for the same video
-      try {
-        localStorage.setItem(`tubefeed-analysis-${video.videoId}`, JSON.stringify(newResult));
-      } catch { /* storage full — ignore */ }
     } catch (err: any) {
       setSummaryError(err.message || "Something went wrong");
     } finally {
