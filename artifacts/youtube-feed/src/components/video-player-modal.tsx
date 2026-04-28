@@ -4,7 +4,7 @@ import {
   X, ExternalLink, Sparkles, Loader2, AlertCircle,
   ChevronDown, ChevronUp, Users, Star, Lightbulb,
   FileText, BookOpen, Zap, CheckCircle2, FileSearch,
-  Download, CheckCircle, Scissors, Film,
+  Download, CheckCircle, Scissors, Film, Bookmark, BookmarkCheck,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { Video } from "@workspace/api-client-react";
@@ -78,6 +78,8 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const { state: dlState, start: startDownload, reset: resetDownload } = useVideoDownload();
   const prevVideoId = useRef<string | null>(null);
   const [showDlPicker, setShowDlPicker] = useState(false);
@@ -95,11 +97,41 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
     }
   }, [video?.videoId, resetDownload]);
 
+  // Check if this video is already saved
+  useEffect(() => {
+    setIsSaved(false);
+    if (!video?.videoId) return;
+    fetch(`/api/saved/${video.videoId}`)
+      .then((r) => r.ok ? r.json() : { saved: false })
+      .then((data) => setIsSaved(data.saved === true))
+      .catch(() => {});
+  }, [video?.videoId]);
+
   const handleDownload = (startTime?: string, endTime?: string) => {
     if (!video) return;
     setShowDlPicker(false);
     startDownload(video.videoId, video.title, startTime || undefined, endTime || undefined);
   };
+
+  const handleSave = useCallback(async () => {
+    if (!video || isSaving) return;
+    setIsSaving(true);
+    try {
+      if (isSaved) {
+        await fetch(`/api/saved/${video.videoId}`, { method: "DELETE" });
+        setIsSaved(false);
+      } else {
+        await fetch("/api/saved", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: `https://youtube.com/watch?v=${video.videoId}` }),
+        });
+        setIsSaved(true);
+      }
+    } catch { /* ignore */ } finally {
+      setIsSaving(false);
+    }
+  }, [video, isSaved, isSaving]);
 
   const isOpen = video !== null;
 
@@ -279,6 +311,25 @@ export function VideoPlayerModal({ video, onClose }: VideoPlayerModalProps) {
                 )}
 
                 <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className={`inline-flex items-center gap-1.5 text-xs transition-colors font-medium ${
+                      isSaved
+                        ? "text-primary hover:text-red-400"
+                        : "text-text-muted hover:text-primary"
+                    }`}
+                  >
+                    {isSaving ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : isSaved ? (
+                      <BookmarkCheck className="w-3.5 h-3.5" />
+                    ) : (
+                      <Bookmark className="w-3.5 h-3.5" />
+                    )}
+                    {isSaved ? "Saved" : "Save"}
+                  </button>
+
                   <a
                     href={`https://youtube.com/watch?v=${video.videoId}`}
                     target="_blank"

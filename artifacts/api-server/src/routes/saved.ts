@@ -36,6 +36,16 @@ router.get("/saved", async (req, res): Promise<void> => {
   res.json(saved);
 });
 
+router.get("/saved/:videoId", async (req, res): Promise<void> => {
+  const { videoId } = req.params;
+  const [row] = await db
+    .select()
+    .from(savedVideosTable)
+    .where(eq(savedVideosTable.videoId, videoId));
+  if (!row) { res.status(404).json({ saved: false }); return; }
+  res.json({ saved: true });
+});
+
 router.post("/saved", async (req, res): Promise<void> => {
   const { url } = req.body as { url?: string };
   if (!url || typeof url !== "string") {
