@@ -57,6 +57,11 @@ router.get("/videos", async (req, res): Promise<void> => {
 // ── General video search ──────────────────────────────────────────────────────
 // Returns results shaped like Video[] so the frontend can reuse VideoCard / VideoPlayerModal
 router.get("/videos/search", async (req, res): Promise<void> => {
+  if (process.env.YOUTUBE_SEARCH_DISABLED === "true") {
+    res.status(503).json({ error: "Search is temporarily disabled", disabled: true });
+    return;
+  }
+
   const q = String(req.query.q ?? "").trim();
   if (!q) { res.status(400).json({ error: "q is required" }); return; }
 

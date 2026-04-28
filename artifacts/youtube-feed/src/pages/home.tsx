@@ -241,6 +241,15 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* Disabled */}
+                {searchState.status === "disabled" && (
+                  <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <AlertCircle className="w-10 h-10 text-text-muted/50 mb-4" />
+                    <p className="text-text-main font-semibold mb-1">Search is temporarily disabled</p>
+                    <p className="text-text-muted text-sm">Check back soon.</p>
+                  </div>
+                )}
+
                 {/* Error */}
                 {searchState.status === "error" && (
                   <div className="flex flex-col items-center justify-center py-20 text-center">

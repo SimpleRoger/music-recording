@@ -7,7 +7,8 @@ type SearchState =
   | { status: "idle" }
   | { status: "loading"; query: string }
   | { status: "done"; query: string; results: Video[] }
-  | { status: "error"; query: string; error: string };
+  | { status: "error"; query: string; error: string }
+  | { status: "disabled" };
 
 export function useVideoSearch() {
   const [state, setState] = useState<SearchState>({ status: "idle" });
@@ -27,6 +28,10 @@ export function useVideoSearch() {
     try {
       const url = `${BASE}/api/videos/search?q=${encodeURIComponent(q)}`;
       const resp = await fetch(url, { signal: controller.signal });
+      if (resp.status === 503) {
+        const data = await resp.json().catch(() => ({}));
+        if (data.disabled) { setState({ status: "disabled" }); return; }
+      }
       if (!resp.ok) throw new Error(`Search failed: ${resp.status}`);
       const results: Video[] = await resp.json();
       setState({ status: "done", query: q, results });
