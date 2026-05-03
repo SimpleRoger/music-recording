@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import {
   Play, Square, Circle, Volume2, ArrowLeft,
   Loader2, Pause, SkipBack, Mic, ZoomIn, ZoomOut,
-  CloudUpload, FolderOpen, Trash2, X, Check,
+  CloudUpload, FolderOpen, Trash2, X, Check, Download,
 } from "lucide-react";
 import type { Video } from "@workspace/api-client-react";
 
@@ -118,8 +118,9 @@ export default function DawPage() {
   const [micError, setMicError]       = useState(false);
   const [beatMuted, setBeatMuted]     = useState(false);
   const [zoom, setZoom]               = useState(50);
-  // Save / Projects
+  // Save / Projects / Export
   const [saveState, setSaveState]     = useState<"idle"|"saving"|"saved"|"error">("idle");
+  const [exportState, setExportState] = useState<"idle"|"exporting"|"done"|"error">("idle");
   const [showProjects, setShowProjects] = useState(false);
   const [projects, setProjects]       = useState<SavedProject[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
@@ -271,6 +272,87 @@ export default function DawPage() {
       const blob = await resp.blob();
       decodeWaveform(blob, laneId);
     } catch { /* ignore */ }
+  }
+
+  // ── WAV export ───────────────────────────────────────────────────────────────
+  function writeWavString(view: DataView, offset: number, str: string) {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  }
+
+  function audioBufferToWav(buf: AudioBuffer): ArrayBuffer {
+    const numCh = buf.numberOfChannels, sr = buf.sampleRate, len = buf.length;
+    const bps = 16, blockAlign = numCh * 2, byteRate = sr * blockAlign;
+    const dataSize = len * blockAlign;
+    const ab = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(ab);
+    writeWavString(view, 0, "RIFF");
+    view.setUint32(4, 36 + dataSize, true);
+    writeWavString(view, 8, "WAVE");
+    writeWavString(view, 12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numCh, true);
+    view.setUint32(24, sr, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bps, true);
+    writeWavString(view, 36, "data");
+    view.setUint32(40, dataSize, true);
+    let off = 44;
+    for (let i = 0; i < len; i++) {
+      for (let ch = 0; ch < numCh; ch++) {
+        const s = Math.max(-1, Math.min(1, buf.getChannelData(ch)[i]));
+        view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+        off += 2;
+      }
+    }
+    return ab;
+  }
+
+  async function handleExport() {
+    const activeLanes = lanesRef.current.filter((l) => !l.muted && l.blobUrl);
+    if (activeLanes.length === 0) return;
+    setExportState("exporting");
+    try {
+      // Determine the total rendered duration
+      const totalDur = activeLanes.reduce(
+        (max, l) => Math.max(max, l.startOffset + l.durationSec),
+        0
+      ) + 0.5;
+      const sampleRate = 44100;
+      const offCtx = new OfflineAudioContext(2, Math.ceil(totalDur * sampleRate), sampleRate);
+      // Decode and schedule every active lane
+      await Promise.all(
+        activeLanes.map(async (lane) => {
+          const resp = await fetch(lane.blobUrl!);
+          const rawBuf = await resp.arrayBuffer();
+          const audioBuf = await offCtx.decodeAudioData(rawBuf);
+          const src = offCtx.createBufferSource();
+          src.buffer = audioBuf;
+          const gain = offCtx.createGain();
+          gain.gain.value = lane.volume / 100;
+          src.connect(gain);
+          gain.connect(offCtx.destination);
+          src.start(lane.startOffset);
+        })
+      );
+      const rendered = await offCtx.startRendering();
+      const wav = audioBufferToWav(rendered);
+      const blob = new Blob([wav], { type: "audio/wav" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(beat?.title ?? "project").slice(0, 40).replace(/[^a-z0-9_\- ]/gi, "")}_mix.wav`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setExportState("done");
+      setTimeout(() => setExportState("idle"), 3000);
+    } catch {
+      setExportState("error");
+      setTimeout(() => setExportState("idle"), 3000);
+    }
   }
 
   // ── Cloud save ───────────────────────────────────────────────────────────────
@@ -586,6 +668,24 @@ export default function DawPage() {
             <FolderOpen className="w-3.5 h-3.5" />Projects
           </button>
 
+          {/* Export button */}
+          <button
+            onClick={handleExport}
+            disabled={!hasAnyRecording || exportState === "exporting"}
+            title={!hasAnyRecording ? "Record something first" : "Export mix as WAV"}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors disabled:opacity-40 ${
+              exportState === "done"      ? "bg-green-600 text-white" :
+              exportState === "error"     ? "bg-red-600 text-white" :
+              exportState === "exporting" ? "bg-purple-600/50 text-purple-300" :
+              "bg-purple-700 hover:bg-purple-600 text-white"
+            }`}
+          >
+            {exportState === "exporting" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :
+             exportState === "done"      ? <Check className="w-3.5 h-3.5" /> :
+             <Download className="w-3.5 h-3.5" />}
+            {exportState === "exporting" ? "Rendering…" : exportState === "done" ? "Downloaded!" : exportState === "error" ? "Error" : "Export"}
+          </button>
+
           {/* Save button */}
           <button
             onClick={handleSave}
@@ -812,7 +912,8 @@ export default function DawPage() {
         <span>Click timeline to seek</span><span className="text-gray-800">·</span>
         <span>Drag clips to reposition</span><span className="text-gray-800">·</span>
         <span>● Arm → ● Record</span><span className="text-gray-800">·</span>
-        <span>Save uploads to cloud · ☁ = saved</span>
+        <span>Save uploads to cloud · ☁ = saved</span><span className="text-gray-800">·</span>
+        <span>Export renders all vocal tracks as a WAV mixdown</span>
       </div>
     </div>
   );
