@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import {
   Play, Square, Circle, Volume2, ArrowLeft,
   Loader2, Pause, SkipBack, Mic, ZoomIn, ZoomOut,
-  CloudUpload, FolderOpen, Trash2, X, Check, Download,
+  CloudUpload, FolderOpen, Trash2, X, Check, Download, SlidersHorizontal, RotateCcw,
 } from "lucide-react";
 import type { Video } from "@workspace/api-client-react";
 
@@ -106,6 +106,48 @@ const BEAT_BARS = Array.from({ length: 200 }, (_, i) =>
   30 + Math.abs(Math.sin(i * 0.37) * 52 + Math.sin(i * 0.13 + 1) * 28)
 );
 
+// ── Vocal FX types ────────────────────────────────────────────────────────────
+type LaneFx = {
+  eq: { low: number; mid: number; high: number };
+  comp: { enabled: boolean; threshold: number; ratio: number };
+  autotune: { enabled: boolean; amount: number; key: string };
+};
+type EffectChain = {
+  lowShelf: BiquadFilterNode; midPeak: BiquadFilterNode; highShelf: BiquadFilterNode;
+  compressor: DynamicsCompressorNode; output: GainNode;
+};
+function defaultFx(): LaneFx {
+  return { eq: { low: 0, mid: 0, high: 0 }, comp: { enabled: false, threshold: -18, ratio: 4 }, autotune: { enabled: false, amount: 50, key: "Chromatic" } };
+}
+const AUTOTUNE_KEYS: Record<string, number[]> = {
+  Chromatic: [0,1,2,3,4,5,6,7,8,9,10,11],
+  C:[0,2,4,5,7,9,11], Db:[1,3,5,6,8,10,0], D:[2,4,6,7,9,11,1], Eb:[3,5,7,8,10,0,2],
+  E:[4,6,8,9,11,1,3], F:[5,7,9,10,0,2,4], "F#":[6,8,10,11,1,3,5], G:[7,9,11,0,2,4,6],
+  Ab:[8,10,0,1,3,5,7], A:[9,11,1,2,4,6,8], Bb:[10,0,2,3,5,7,9], B:[11,1,3,4,6,8,10],
+};
+function detectPitchAC(buf: Float32Array, sr: number): number | null {
+  const N = Math.min(buf.length, 2048);
+  let rms = 0; for (let i = 0; i < N; i++) rms += buf[i] * buf[i]; rms = Math.sqrt(rms / N);
+  if (rms < 0.01) return null;
+  const minL = Math.floor(sr / 900), maxL = Math.floor(sr / 60);
+  let best = 0, bestLag = 0;
+  for (let lag = minL; lag < maxL && lag < N / 2; lag++) {
+    let c = 0; for (let i = 0; i < N / 2; i++) c += buf[i] * buf[i + lag];
+    if (c > best) { best = c; bestLag = lag; }
+  }
+  return bestLag > 0 ? sr / bestLag : null;
+}
+function snapToKey(midiFloat: number, key: string): number {
+  const notes = AUTOTUNE_KEYS[key] ?? AUTOTUNE_KEYS["Chromatic"];
+  const octave = Math.floor(midiFloat / 12), note = midiFloat % 12;
+  let bestNote = notes[0], bestDist = Infinity;
+  for (const n of notes) {
+    const dist = Math.min(Math.abs(n - note), 12 - Math.abs(n - note));
+    if (dist < bestDist) { bestDist = dist; bestNote = n; }
+  }
+  return octave * 12 + bestNote;
+}
+
 // ── Main DAW page ─────────────────────────────────────────────────────────────
 export default function DawPage() {
   const [beat, setBeat]               = useState<Video | null>(null);
@@ -126,6 +168,9 @@ export default function DawPage() {
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [deletingId, setDeletingId]   = useState<number | null>(null);
   const [loadingId, setLoadingId]     = useState<number | null>(null);
+  const [lanesFx, setLanesFx]         = useState<LaneFx[]>(() => [0,1,2].map(defaultFx));
+  const [fxLane, setFxLane]           = useState<number | null>(null);
+  const [autotuneProcessing, setAutotuneProcessing] = useState<Set<number>>(new Set());
 
   const ytRef      = useRef<any>(null);
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -140,9 +185,17 @@ export default function DawPage() {
   const lanesRef   = useRef(lanes);
   const schedules  = useRef<ReturnType<typeof setTimeout>[]>([]);
   const dragRef    = useRef<{ laneId: number; startX: number; origOffset: number } | null>(null);
+  const isPlayingRef  = useRef(false);
+  const lanesFxRef    = useRef<LaneFx[]>(lanesFx);
+  const audioCtxRef   = useRef<AudioContext | null>(null);
+  const srcNodesRef   = useRef<(MediaElementAudioSourceNode | null)[]>([null, null, null]);
+  const chainRef      = useRef<(EffectChain | null)[]>([null, null, null]);
+  const origBlobsRef  = useRef<(string | null)[]>([null, null, null]);
 
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
   useEffect(() => { lanesRef.current = lanes; }, [lanes]);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { lanesFxRef.current = lanesFx; }, [lanesFx]);
 
   // ── Load beat from sessionStorage on mount ──
   useEffect(() => {
@@ -199,6 +252,32 @@ export default function DawPage() {
     return () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
   }, []);
 
+  // ── Spacebar play/pause ───────────────────────────────────────────────────────
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.code !== "Space") return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      e.preventDefault();
+      if (isRecording) return;
+      if (isPlayingRef.current) {
+        clearSchedules(); stopClock();
+        try { ytRef.current?.pauseVideo?.(); } catch (_) {}
+        audioEls.current.forEach((a) => { if (a) a.pause(); });
+        setIsPlaying(false);
+      } else {
+        if (!ytReady) return;
+        const t = timeRef.current;
+        try { ytRef.current?.seekTo?.(t, true); ytRef.current?.playVideo?.(); } catch (_) {}
+        scheduleLanes(t, lanesRef.current);
+        startClock(t); setIsPlaying(true);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecording, ytReady]);
+
   // ── Helpers ──────────────────────────────────────────────────────────────────
   function clearSchedules() {
     schedules.current.forEach(clearTimeout); schedules.current = [];
@@ -227,8 +306,79 @@ export default function DawPage() {
     setTime(0); timeRef.current = 0;
   }
 
+  // ── Web Audio FX chain ────────────────────────────────────────────────────────
+  function ensureAudioCtx(): AudioContext {
+    if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+      audioCtxRef.current = new AudioContext();
+    }
+    if (audioCtxRef.current.state === "suspended") {
+      audioCtxRef.current.resume().catch(() => {});
+    }
+    return audioCtxRef.current;
+  }
+
+  function buildChain(ctx: AudioContext, fx: LaneFx): EffectChain {
+    const lowShelf = ctx.createBiquadFilter();
+    lowShelf.type = "lowshelf"; lowShelf.frequency.value = 200; lowShelf.gain.value = fx.eq.low;
+    const midPeak = ctx.createBiquadFilter();
+    midPeak.type = "peaking"; midPeak.frequency.value = 1000; midPeak.Q.value = 1.5; midPeak.gain.value = fx.eq.mid;
+    const highShelf = ctx.createBiquadFilter();
+    highShelf.type = "highshelf"; highShelf.frequency.value = 8000; highShelf.gain.value = fx.eq.high;
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.value = fx.comp.threshold; compressor.ratio.value = fx.comp.ratio;
+    compressor.knee.value = 10; compressor.attack.value = 0.005; compressor.release.value = 0.3;
+    const output = ctx.createGain(); output.gain.value = 1;
+    lowShelf.connect(midPeak); midPeak.connect(highShelf);
+    if (fx.comp.enabled) { highShelf.connect(compressor); compressor.connect(output); }
+    else { highShelf.connect(output); }
+    output.connect(ctx.destination);
+    return { lowShelf, midPeak, highShelf, compressor, output };
+  }
+
+  function connectLaneAudio(i: number, el: HTMLAudioElement) {
+    const ctx = ensureAudioCtx();
+    if (!srcNodesRef.current[i]) {
+      srcNodesRef.current[i] = ctx.createMediaElementSource(el);
+    }
+    const src = srcNodesRef.current[i]!;
+    try { src.disconnect(); } catch (_) {}
+    if (chainRef.current[i]) { try { chainRef.current[i]!.output.disconnect(); } catch (_) {} }
+    const chain = buildChain(ctx, lanesFxRef.current[i]);
+    src.connect(chain.lowShelf);
+    chainRef.current[i] = chain;
+  }
+
+  function updateFxForLane(laneId: number, updater: (fx: LaneFx) => LaneFx, rebuildChain = false) {
+    setLanesFx((prev) => {
+      const next = prev.map((fx, i) => i === laneId ? updater(fx) : fx);
+      lanesFxRef.current = next;
+      const chain = chainRef.current[laneId];
+      const ctx = audioCtxRef.current;
+      if (chain && ctx && !rebuildChain) {
+        const nfx = next[laneId]; const now = ctx.currentTime;
+        chain.lowShelf.gain.setValueAtTime(nfx.eq.low, now);
+        chain.midPeak.gain.setValueAtTime(nfx.eq.mid, now);
+        chain.highShelf.gain.setValueAtTime(nfx.eq.high, now);
+        if (nfx.comp.enabled) {
+          chain.compressor.threshold.setValueAtTime(nfx.comp.threshold, now);
+          chain.compressor.ratio.setValueAtTime(nfx.comp.ratio, now);
+        }
+      }
+      return next;
+    });
+    if (rebuildChain) {
+      const el = audioEls.current[laneId];
+      if (el) setTimeout(() => connectLaneAudio(laneId, el), 0);
+    }
+  }
+
   function scheduleLanes(t: number, ls: Lane[]) {
     clearSchedules();
+    // Route each audio element through its FX chain
+    ls.forEach((lane, i) => {
+      const a = audioEls.current[i];
+      if (a && lane.blobUrl) connectLaneAudio(i, a);
+    });
     ls.forEach((lane, i) => {
       const a = audioEls.current[i];
       if (!a || !lane.blobUrl || lane.muted) return;
@@ -421,6 +571,63 @@ export default function DawPage() {
       setSaveState("error");
       setTimeout(() => setSaveState("idle"), 3000);
     }
+  }
+
+  // ── Autotune (offline pitch correction) ─────────────────────────────────────
+  async function applyAutotune(laneId: number) {
+    const lane = lanesRef.current[laneId];
+    if (!lane?.blobUrl) return;
+    const fx = lanesFxRef.current[laneId];
+    setAutotuneProcessing((p) => new Set([...p, laneId]));
+    try {
+      const resp = await fetch(lane.blobUrl);
+      const arrayBuf = await resp.arrayBuffer();
+      const tempCtx = new AudioContext();
+      const audioBuf = await tempCtx.decodeAudioData(arrayBuf);
+      await tempCtx.close();
+      const chData = audioBuf.getChannelData(0);
+      const frameSize = 2048;
+      const pitches: number[] = [];
+      for (let s = 0; s < chData.length - frameSize * 2; s += frameSize) {
+        const frame = chData.slice(s, s + frameSize);
+        const p = detectPitchAC(frame, audioBuf.sampleRate);
+        if (p !== null) pitches.push(p);
+      }
+      if (pitches.length === 0) {
+        setAutotuneProcessing((p) => { const n = new Set(p); n.delete(laneId); return n; });
+        return;
+      }
+      pitches.sort((a, b) => a - b);
+      const medPitch = pitches[Math.floor(pitches.length / 2)];
+      const midiF = 12 * Math.log2(medPitch / 440) + 69;
+      const snapped = snapToKey(midiF, fx.autotune.key);
+      const corrCents = (snapped - midiF) * 100 * (fx.autotune.amount / 100);
+      if (Math.abs(corrCents) < 1) {
+        setAutotuneProcessing((p) => { const n = new Set(p); n.delete(laneId); return n; });
+        return;
+      }
+      const offCtx = new OfflineAudioContext(audioBuf.numberOfChannels, audioBuf.length, audioBuf.sampleRate);
+      const src = offCtx.createBufferSource();
+      src.buffer = audioBuf; src.detune.value = corrCents;
+      src.connect(offCtx.destination); src.start(0);
+      const rendered = await offCtx.startRendering();
+      origBlobsRef.current[laneId] = lane.blobUrl;
+      const wav = audioBufferToWav(rendered);
+      const blob = new Blob([wav], { type: "audio/wav" });
+      const newUrl = URL.createObjectURL(blob);
+      setLanes((p) => p.map((l) => l.id === laneId ? { ...l, blobUrl: newUrl, mime: "audio/wav", objectPath: null } : l));
+      decodeWaveform(blob, laneId);
+    } catch { /* ignore */ }
+    setAutotuneProcessing((p) => { const n = new Set(p); n.delete(laneId); return n; });
+  }
+
+  function revertAutotune(laneId: number) {
+    const orig = origBlobsRef.current[laneId];
+    if (!orig) return;
+    setLanes((p) => p.map((l) => l.id === laneId ? { ...l, blobUrl: orig, mime: "audio/webm", objectPath: null } : l));
+    decodeWaveformFromUrl(orig, laneId);
+    origBlobsRef.current[laneId] = null;
+    updateFxForLane(laneId, (fx) => ({ ...fx, autotune: { ...fx.autotune, enabled: false } }));
   }
 
   // ── Projects panel ───────────────────────────────────────────────────────────
@@ -764,13 +971,26 @@ export default function DawPage() {
                   <span className="text-[9px] text-gray-600 w-6 text-right shrink-0">{lane.volume}</span>
                 </div>
               </div>
-              <button
-                onClick={() => setLanes((p) => p.map((l) => l.id === lane.id ? { ...l, muted: !l.muted } : l))}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold transition-all shrink-0 border"
-                style={lane.muted
-                  ? { backgroundColor: "rgba(234,179,8,0.15)", borderColor: "rgba(234,179,8,0.4)", color: "#eab308" }
-                  : { borderColor: "#2a2a2a", color: "#555" }}
-              >M</button>
+              <div className="flex flex-col gap-0.5 shrink-0">
+                <button
+                  onClick={() => setLanes((p) => p.map((l) => l.id === lane.id ? { ...l, muted: !l.muted } : l))}
+                  className="w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-bold transition-all border"
+                  style={lane.muted
+                    ? { backgroundColor: "rgba(234,179,8,0.15)", borderColor: "rgba(234,179,8,0.4)", color: "#eab308" }
+                    : { borderColor: "#2a2a2a", color: "#555" }}
+                  title="Mute"
+                >M</button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setFxLane((p) => p === lane.id ? null : lane.id); }}
+                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all border"
+                  style={fxLane === lane.id
+                    ? { backgroundColor: "rgba(139,92,246,0.2)", borderColor: "rgba(139,92,246,0.5)", color: "#a78bfa" }
+                    : { borderColor: "#2a2a2a", color: "#555" }}
+                  title="Vocal FX"
+                >
+                  <SlidersHorizontal className="w-2.5 h-2.5" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -905,17 +1125,206 @@ export default function DawPage() {
             onLoad={handleLoadProject} onDelete={handleDeleteProject}
           />
         )}
+
+        {/* FX panel */}
+        {fxLane !== null && !showProjects && (
+          <FxPanel
+            lane={lanes[fxLane]}
+            fx={lanesFx[fxLane]}
+            processing={autotuneProcessing.has(fxLane)}
+            hasOriginal={origBlobsRef.current[fxLane] !== null}
+            onClose={() => setFxLane(null)}
+            onFxChange={(updater, rebuild) => updateFxForLane(fxLane!, updater, rebuild)}
+            onApplyAutotune={() => applyAutotune(fxLane!)}
+            onRevertAutotune={() => revertAutotune(fxLane!)}
+          />
+        )}
       </div>
 
       {/* Hint bar */}
       <div className="h-7 bg-[#111] border-t border-[#1e1e1e] flex items-center px-4 text-[10px] text-gray-700 gap-4 shrink-0">
+        <span>Space = play/pause</span><span className="text-gray-800">·</span>
         <span>Click timeline to seek</span><span className="text-gray-800">·</span>
         <span>Drag clips to reposition</span><span className="text-gray-800">·</span>
         <span>● Arm → ● Record</span><span className="text-gray-800">·</span>
-        <span>Save uploads to cloud · ☁ = saved</span><span className="text-gray-800">·</span>
-        <span>Export renders all vocal tracks as a WAV mixdown</span>
+        <span>FX button = EQ · Compression · Autotune per lane</span><span className="text-gray-800">·</span>
+        <span>Export = WAV mixdown</span>
       </div>
     </div>
+  );
+}
+
+// ── FX Panel ──────────────────────────────────────────────────────────────────
+function FxSlider({ label, value, min, max, step, unit, onChange }: {
+  label: string; value: number; min: number; max: number; step: number; unit?: string;
+  onChange: (v: number) => void;
+}) {
+  const pct = ((value - min) / (max - min)) * 100;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-gray-500 w-10 shrink-0">{label}</span>
+      <input
+        type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="flex-1 h-1 cursor-pointer accent-violet-500"
+        style={{ background: `linear-gradient(to right, #8b5cf6 ${pct}%, #333 ${pct}%)` }}
+      />
+      <span className="text-[10px] text-gray-400 w-12 text-right shrink-0 tabular-nums">
+        {value > 0 && min < 0 ? "+" : ""}{value}{unit ?? ""}
+      </span>
+    </div>
+  );
+}
+
+function FxPanel({
+  lane, fx, processing, hasOriginal, onClose, onFxChange, onApplyAutotune, onRevertAutotune,
+}: {
+  lane: Lane;
+  fx: LaneFx;
+  processing: boolean;
+  hasOriginal: boolean;
+  onClose: () => void;
+  onFxChange: (updater: (fx: LaneFx) => LaneFx, rebuild?: boolean) => void;
+  onApplyAutotune: () => void;
+  onRevertAutotune: () => void;
+}) {
+  return (
+    <>
+      <div className="absolute inset-0 z-40 bg-black/40" onClick={onClose} />
+      <div className="absolute right-0 top-0 bottom-0 z-50 w-72 bg-[#1a1a1a] border-l border-[#2a2a2a] flex flex-col shadow-2xl overflow-y-auto">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a2a] shrink-0 sticky top-0 bg-[#1a1a1a] z-10">
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4 text-violet-400" />
+            <span className="text-sm font-bold text-white">{lane.name} FX</span>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-white/10 text-gray-500 hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 p-4 space-y-5">
+
+          {/* ── EQ ── */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-3 rounded-full bg-violet-500" />
+              <span className="text-[11px] font-bold text-gray-300 uppercase tracking-widest">EQ</span>
+            </div>
+            <div className="space-y-2.5">
+              <FxSlider
+                label="Low" value={fx.eq.low} min={-12} max={12} step={0.5} unit=" dB"
+                onChange={(v) => onFxChange((f) => ({ ...f, eq: { ...f.eq, low: v } }))}
+              />
+              <FxSlider
+                label="Mid" value={fx.eq.mid} min={-12} max={12} step={0.5} unit=" dB"
+                onChange={(v) => onFxChange((f) => ({ ...f, eq: { ...f.eq, mid: v } }))}
+              />
+              <FxSlider
+                label="High" value={fx.eq.high} min={-12} max={12} step={0.5} unit=" dB"
+                onChange={(v) => onFxChange((f) => ({ ...f, eq: { ...f.eq, high: v } }))}
+              />
+              <button
+                onClick={() => onFxChange((f) => ({ ...f, eq: { low: 0, mid: 0, high: 0 } }))}
+                className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors"
+              >Reset EQ</button>
+            </div>
+          </section>
+
+          <div className="border-t border-[#252525]" />
+
+          {/* ── Compression ── */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-3 rounded-full bg-blue-500" />
+                <span className="text-[11px] font-bold text-gray-300 uppercase tracking-widest">Compression</span>
+              </div>
+              <button
+                onClick={() => onFxChange((f) => ({ ...f, comp: { ...f.comp, enabled: !f.comp.enabled } }), true)}
+                className={`w-9 h-5 rounded-full transition-colors relative ${fx.comp.enabled ? "bg-blue-600" : "bg-[#333]"}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all shadow ${fx.comp.enabled ? "left-4.5 left-[18px]" : "left-0.5"}`} />
+              </button>
+            </div>
+            <div className={`space-y-2.5 transition-opacity ${fx.comp.enabled ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
+              <FxSlider
+                label="Thresh" value={fx.comp.threshold} min={-48} max={0} step={1} unit=" dB"
+                onChange={(v) => onFxChange((f) => ({ ...f, comp: { ...f.comp, threshold: v } }))}
+              />
+              <FxSlider
+                label="Ratio" value={fx.comp.ratio} min={1} max={20} step={0.5} unit=":1"
+                onChange={(v) => onFxChange((f) => ({ ...f, comp: { ...f.comp, ratio: v } }))}
+              />
+            </div>
+          </section>
+
+          <div className="border-t border-[#252525]" />
+
+          {/* ── Autotune ── */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-3 rounded-full bg-green-500" />
+                <span className="text-[11px] font-bold text-gray-300 uppercase tracking-widest">Autotune</span>
+              </div>
+              <button
+                onClick={() => onFxChange((f) => ({ ...f, autotune: { ...f.autotune, enabled: !f.autotune.enabled } }))}
+                className={`w-9 h-5 rounded-full transition-colors relative ${fx.autotune.enabled ? "bg-green-600" : "bg-[#333]"}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all shadow ${fx.autotune.enabled ? "left-[18px]" : "left-0.5"}`} />
+              </button>
+            </div>
+
+            <div className={`space-y-3 transition-opacity ${fx.autotune.enabled ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
+              <FxSlider
+                label="Amount" value={fx.autotune.amount} min={0} max={100} step={1} unit="%"
+                onChange={(v) => onFxChange((f) => ({ ...f, autotune: { ...f.autotune, amount: v } }))}
+              />
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-500 w-10 shrink-0">Key</span>
+                <select
+                  value={fx.autotune.key}
+                  onChange={(e) => onFxChange((f) => ({ ...f, autotune: { ...f.autotune, key: e.target.value } }))}
+                  className="flex-1 h-7 px-2 bg-[#111] border border-[#333] rounded-lg text-[11px] text-white focus:outline-none focus:border-violet-500/50 cursor-pointer"
+                >
+                  {Object.keys(AUTOTUNE_KEYS).map((k) => <option key={k} value={k}>{k === "Chromatic" ? "Chromatic (all notes)" : `${k} Major`}</option>)}
+                </select>
+              </div>
+
+              {!lane.blobUrl ? (
+                <p className="text-[10px] text-gray-600 italic">Record a vocal first to apply autotune.</p>
+              ) : (
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={onApplyAutotune}
+                    disabled={processing}
+                    className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white text-[11px] font-bold transition-colors"
+                  >
+                    {processing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                    {processing ? "Processing…" : "Apply to Recording"}
+                  </button>
+                  {hasOriginal && (
+                    <button
+                      onClick={onRevertAutotune}
+                      className="flex items-center justify-center gap-1 h-8 px-2.5 rounded-lg border border-[#333] hover:border-[#555] text-gray-500 hover:text-white text-[11px] transition-colors"
+                      title="Revert to original"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              )}
+              <p className="text-[9px] text-gray-700 leading-relaxed">
+                Detects the dominant pitch and snaps it to the nearest note in the selected key.
+                Use Amount to control correction strength. Slight changes to tempo may occur.
+              </p>
+            </div>
+          </section>
+        </div>
+      </div>
+    </>
   );
 }
 
