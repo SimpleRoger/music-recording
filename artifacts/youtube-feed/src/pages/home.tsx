@@ -2,9 +2,8 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Link } from "wouter";
 import {
   Plus, Youtube, AlertCircle, RefreshCw, Music2, FileText,
-  Mic, Clock, Flame, Bookmark, Wand2, Search, X, Loader2, MoonStar, Dumbbell, Sliders,
+  Mic, Clock, Flame, Bookmark, Wand2, Search, X, Loader2, Dumbbell, Sliders,
 } from "lucide-react";
-import { useBedtime } from "../hooks/use-bedtime";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "../lib/utils";
 import { useVideos } from "../hooks/use-videos";
@@ -28,8 +27,6 @@ export default function Home() {
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const { state: searchState, search, clear: clearSearch } = useVideoSearch();
-
-  const { isLocked } = useBedtime();
 
   const { data: channels } = useChannels();
   const { data: videos, isLoading: isVideosLoading, isError, error, refetch } = useVideos(selectedChannelId, order);
@@ -165,18 +162,6 @@ export default function Home() {
                   <X className="w-4 h-4" />
                 </button>
               </motion.form>
-            ) : isLocked ? (
-              <motion.div
-                key="search-locked"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium select-none"
-                title="Searches locked 10pm–7am"
-              >
-                <MoonStar className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden sm:inline">Locked 10pm–7am</span>
-              </motion.div>
             ) : (
               <motion.button
                 key="search-icon"
