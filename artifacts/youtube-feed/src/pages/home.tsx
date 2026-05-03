@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Link } from "wouter";
 import {
   Plus, Youtube, AlertCircle, RefreshCw, Music2, FileText,
-  Mic, Clock, Flame, Bookmark, Wand2, Search, X, Loader2, MoonStar, Dumbbell,
+  Mic, Clock, Flame, Bookmark, Wand2, Search, X, Loader2, MoonStar, Dumbbell, Sliders,
 } from "lucide-react";
 import { useBedtime } from "../hooks/use-bedtime";
 import { motion, AnimatePresence } from "framer-motion";
@@ -88,6 +88,11 @@ export default function Home() {
             <Link href="/beats">
               <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
                 <Music2 className="w-3.5 h-3.5" />Beats
+              </span>
+            </Link>
+            <Link href="/daw">
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
+                <Sliders className="w-3.5 h-3.5" />DAW
               </span>
             </Link>
             <Link href="/lyrics">
