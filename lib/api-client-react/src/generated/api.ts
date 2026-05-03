@@ -20,7 +20,9 @@ import type {
   AddChannelRequest,
   Channel,
   ChannelSearchResult,
+  CreateDawProjectBody,
   CreateRecordingBody,
+  DawProjectItem,
   ErrorResponse,
   GetSimilarBeatsParams,
   HealthStatus,
@@ -29,8 +31,9 @@ import type {
   RecordingItem,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
-  SavedVideoItem,
   SaveVideoBody,
+  SavedVideoItem,
+  SavedVideoStatus,
   SearchBeatChannelsParams,
   SearchBeatsParams,
   SearchChannelsParams,
@@ -1372,6 +1375,339 @@ export const useRequestUploadUrl = <
 };
 
 /**
+ * @summary List all saved videos
+ */
+export const getListSavedVideosUrl = () => {
+  return `/api/saved`;
+};
+
+export const listSavedVideos = async (
+  options?: RequestInit,
+): Promise<SavedVideoItem[]> => {
+  return customFetch<SavedVideoItem[]>(getListSavedVideosUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListSavedVideosQueryKey = () => {
+  return [`/api/saved`] as const;
+};
+
+export const getListSavedVideosQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSavedVideos>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSavedVideos>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListSavedVideosQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listSavedVideos>>> = ({
+    signal,
+  }) => listSavedVideos({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSavedVideos>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSavedVideosQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSavedVideos>>
+>;
+export type ListSavedVideosQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all saved videos
+ */
+
+export function useListSavedVideos<
+  TData = Awaited<ReturnType<typeof listSavedVideos>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSavedVideos>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSavedVideosQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Save a video by URL
+ */
+export const getSaveVideoUrl = () => {
+  return `/api/saved`;
+};
+
+export const saveVideo = async (
+  saveVideoBody: SaveVideoBody,
+  options?: RequestInit,
+): Promise<SavedVideoItem> => {
+  return customFetch<SavedVideoItem>(getSaveVideoUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(saveVideoBody),
+  });
+};
+
+export const getSaveVideoMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveVideo>>,
+    TError,
+    { data: BodyType<SaveVideoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof saveVideo>>,
+  TError,
+  { data: BodyType<SaveVideoBody> },
+  TContext
+> => {
+  const mutationKey = ["saveVideo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof saveVideo>>,
+    { data: BodyType<SaveVideoBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return saveVideo(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SaveVideoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof saveVideo>>
+>;
+export type SaveVideoMutationBody = BodyType<SaveVideoBody>;
+export type SaveVideoMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Save a video by URL
+ */
+export const useSaveVideo = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveVideo>>,
+    TError,
+    { data: BodyType<SaveVideoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof saveVideo>>,
+  TError,
+  { data: BodyType<SaveVideoBody> },
+  TContext
+> => {
+  return useMutation(getSaveVideoMutationOptions(options));
+};
+
+/**
+ * @summary Check if a video is saved
+ */
+export const getCheckSavedVideoUrl = (videoId: string) => {
+  return `/api/saved/${videoId}`;
+};
+
+export const checkSavedVideo = async (
+  videoId: string,
+  options?: RequestInit,
+): Promise<SavedVideoStatus> => {
+  return customFetch<SavedVideoStatus>(getCheckSavedVideoUrl(videoId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getCheckSavedVideoQueryKey = (videoId: string) => {
+  return [`/api/saved/${videoId}`] as const;
+};
+
+export const getCheckSavedVideoQueryOptions = <
+  TData = Awaited<ReturnType<typeof checkSavedVideo>>,
+  TError = ErrorType<void>,
+>(
+  videoId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof checkSavedVideo>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getCheckSavedVideoQueryKey(videoId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof checkSavedVideo>>> = ({
+    signal,
+  }) => checkSavedVideo(videoId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!videoId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof checkSavedVideo>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type CheckSavedVideoQueryResult = NonNullable<
+  Awaited<ReturnType<typeof checkSavedVideo>>
+>;
+export type CheckSavedVideoQueryError = ErrorType<void>;
+
+/**
+ * @summary Check if a video is saved
+ */
+
+export function useCheckSavedVideo<
+  TData = Awaited<ReturnType<typeof checkSavedVideo>>,
+  TError = ErrorType<void>,
+>(
+  videoId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof checkSavedVideo>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getCheckSavedVideoQueryOptions(videoId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Remove a saved video
+ */
+export const getRemoveSavedVideoUrl = (videoId: string) => {
+  return `/api/saved/${videoId}`;
+};
+
+export const removeSavedVideo = async (
+  videoId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getRemoveSavedVideoUrl(videoId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getRemoveSavedVideoMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeSavedVideo>>,
+    TError,
+    { videoId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeSavedVideo>>,
+  TError,
+  { videoId: string },
+  TContext
+> => {
+  const mutationKey = ["removeSavedVideo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeSavedVideo>>,
+    { videoId: string }
+  > = (props) => {
+    const { videoId } = props ?? {};
+
+    return removeSavedVideo(videoId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveSavedVideoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeSavedVideo>>
+>;
+
+export type RemoveSavedVideoMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove a saved video
+ */
+export const useRemoveSavedVideo = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeSavedVideo>>,
+    TError,
+    { videoId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeSavedVideo>>,
+  TError,
+  { videoId: string },
+  TContext
+> => {
+  return useMutation(getRemoveSavedVideoMutationOptions(options));
+};
+
+/**
  * @summary List all saved recordings
  */
 export const getListRecordingsUrl = () => {
@@ -1616,156 +1952,334 @@ export const useDeleteRecording = <
   return useMutation(getDeleteRecordingMutationOptions(options));
 };
 
-// ─── Saved Videos ────────────────────────────────────────────────────────────
+/**
+ * @summary List all saved DAW projects
+ */
+export const getListDawProjectsUrl = () => {
+  return `/api/daw/projects`;
+};
 
-export const getListSavedVideosUrl = () => `/api/saved`;
-
-export const listSavedVideos = async (
+export const listDawProjects = async (
   options?: RequestInit,
-): Promise<SavedVideoItem[]> => {
-  return customFetch<SavedVideoItem[]>(getListSavedVideosUrl(), {
+): Promise<DawProjectItem[]> => {
+  return customFetch<DawProjectItem[]>(getListDawProjectsUrl(), {
     ...options,
     method: "GET",
   });
 };
 
-export const getListSavedVideosQueryKey = () =>
-  [`/api/saved`] as const;
+export const getListDawProjectsQueryKey = () => {
+  return [`/api/daw/projects`] as const;
+};
 
-export const getListSavedVideosQueryOptions = <
-  TData = Awaited<ReturnType<typeof listSavedVideos>>,
-  TError = ErrorType<ErrorResponse>,
+export const getListDawProjectsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDawProjects>>,
+  TError = ErrorType<unknown>,
 >(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof listSavedVideos>>, TError, TData>;
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDawProjects>>,
+    TError,
+    TData
+  >;
   request?: SecondParameter<typeof customFetch>;
 }) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getListSavedVideosQueryKey();
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof listSavedVideos>>> = ({
+
+  const queryKey = queryOptions?.queryKey ?? getListDawProjectsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listDawProjects>>> = ({
     signal,
-  }) => listSavedVideos({ signal, ...requestOptions });
+  }) => listDawProjects({ signal, ...requestOptions });
+
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof listSavedVideos>>,
+    Awaited<ReturnType<typeof listDawProjects>>,
     TError,
     TData
   > & { queryKey: QueryKey };
 };
 
-export function useListSavedVideos<
-  TData = Awaited<ReturnType<typeof listSavedVideos>>,
-  TError = ErrorType<ErrorResponse>,
+export type ListDawProjectsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDawProjects>>
+>;
+export type ListDawProjectsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all saved DAW projects
+ */
+
+export function useListDawProjects<
+  TData = Awaited<ReturnType<typeof listDawProjects>>,
+  TError = ErrorType<unknown>,
 >(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof listSavedVideos>>, TError, TData>;
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDawProjects>>,
+    TError,
+    TData
+  >;
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListSavedVideosQueryOptions(options);
+  const queryOptions = getListDawProjectsQueryOptions(options);
+
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
   };
-  query.queryKey = queryOptions.queryKey;
-  return query;
+
+  return { ...query, queryKey: queryOptions.queryKey };
 }
 
-export const saveVideo = async (
-  body: SaveVideoBody,
+/**
+ * @summary Save a new DAW project
+ */
+export const getCreateDawProjectUrl = () => {
+  return `/api/daw/projects`;
+};
+
+export const createDawProject = async (
+  createDawProjectBody: CreateDawProjectBody,
   options?: RequestInit,
-): Promise<SavedVideoItem> => {
-  return customFetch<SavedVideoItem>(`/api/saved`, {
+): Promise<DawProjectItem> => {
+  return customFetch<DawProjectItem>(getCreateDawProjectUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(body),
+    body: JSON.stringify(createDawProjectBody),
   });
 };
 
-export const getSaveVideoMutationOptions = <
-  TError = ErrorType<ErrorResponse>,
+export const getCreateDawProjectMutationOptions = <
+  TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof saveVideo>>,
+    Awaited<ReturnType<typeof createDawProject>>,
     TError,
-    SaveVideoBody,
+    { data: BodyType<CreateDawProjectBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
-}) => {
-  const mutationKey = [`/api/saved`];
-  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDawProject>>,
+  TError,
+  { data: BodyType<CreateDawProjectBody> },
+  TContext
+> => {
+  const mutationKey = ["createDawProject"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof saveVideo>>,
-    SaveVideoBody
-  > = (body) => saveVideo(body, requestOptions);
-  return { mutationFn, mutationKey, ...mutationOptions };
+    Awaited<ReturnType<typeof createDawProject>>,
+    { data: BodyType<CreateDawProjectBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createDawProject(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export const useSaveVideo = <
-  TError = ErrorType<ErrorResponse>,
+export type CreateDawProjectMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDawProject>>
+>;
+export type CreateDawProjectMutationBody = BodyType<CreateDawProjectBody>;
+export type CreateDawProjectMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Save a new DAW project
+ */
+export const useCreateDawProject = <
+  TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof saveVideo>>,
+    Awaited<ReturnType<typeof createDawProject>>,
     TError,
-    SaveVideoBody,
+    { data: BodyType<CreateDawProjectBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof saveVideo>>,
+  Awaited<ReturnType<typeof createDawProject>>,
   TError,
-  SaveVideoBody,
+  { data: BodyType<CreateDawProjectBody> },
   TContext
 > => {
-  return useMutation(getSaveVideoMutationOptions(options));
+  return useMutation(getCreateDawProjectMutationOptions(options));
 };
 
-export const removeSavedVideo = async (
-  videoId: string,
+/**
+ * @summary Get a single DAW project
+ */
+export const getGetDawProjectUrl = (id: number) => {
+  return `/api/daw/projects/${id}`;
+};
+
+export const getDawProject = async (
+  id: number,
+  options?: RequestInit,
+): Promise<DawProjectItem> => {
+  return customFetch<DawProjectItem>(getGetDawProjectUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDawProjectQueryKey = (id: number) => {
+  return [`/api/daw/projects/${id}`] as const;
+};
+
+export const getGetDawProjectQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDawProject>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDawProject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDawProjectQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDawProject>>> = ({
+    signal,
+  }) => getDawProject(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDawProject>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDawProjectQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDawProject>>
+>;
+export type GetDawProjectQueryError = ErrorType<void>;
+
+/**
+ * @summary Get a single DAW project
+ */
+
+export function useGetDawProject<
+  TData = Awaited<ReturnType<typeof getDawProject>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDawProject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDawProjectQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Delete a DAW project
+ */
+export const getDeleteDawProjectUrl = (id: number) => {
+  return `/api/daw/projects/${id}`;
+};
+
+export const deleteDawProject = async (
+  id: number,
   options?: RequestInit,
 ): Promise<void> => {
-  return customFetch<void>(`/api/saved/${videoId}`, {
+  return customFetch<void>(getDeleteDawProjectUrl(id), {
     ...options,
     method: "DELETE",
   });
 };
 
-export const getRemoveSavedVideoMutationOptions = <
-  TError = ErrorType<ErrorResponse>,
+export const getDeleteDawProjectMutationOptions = <
+  TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof removeSavedVideo>>,
+    Awaited<ReturnType<typeof deleteDawProject>>,
     TError,
-    { videoId: string },
+    { id: number },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
-}) => {
-  const mutationKey = [`/api/saved/:videoId`];
-  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteDawProject>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteDawProject"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof removeSavedVideo>>,
-    { videoId: string }
-  > = ({ videoId }) => removeSavedVideo(videoId, requestOptions);
-  return { mutationFn, mutationKey, ...mutationOptions };
+    Awaited<ReturnType<typeof deleteDawProject>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteDawProject(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export const useRemoveSavedVideo = <
-  TError = ErrorType<ErrorResponse>,
+export type DeleteDawProjectMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteDawProject>>
+>;
+
+export type DeleteDawProjectMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a DAW project
+ */
+export const useDeleteDawProject = <
+  TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof removeSavedVideo>>,
+    Awaited<ReturnType<typeof deleteDawProject>>,
     TError,
-    { videoId: string },
+    { id: number },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof removeSavedVideo>>,
+  Awaited<ReturnType<typeof deleteDawProject>>,
   TError,
-  { videoId: string },
+  { id: number },
   TContext
 > => {
-  return useMutation(getRemoveSavedVideoMutationOptions(options));
+  return useMutation(getDeleteDawProjectMutationOptions(options));
 };

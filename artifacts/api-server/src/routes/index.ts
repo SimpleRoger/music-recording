@@ -9,6 +9,7 @@ import recordingsRouter from "./recordings";
 import savedRouter from "./saved";
 import extractedBeatsRouter from "./extracted-beats";
 import videoDownloadRouter from "./video-download";
+import dawProjectsRouter from "./daw-projects";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(recordingsRouter);
 router.use(savedRouter);
 router.use(extractedBeatsRouter);
 router.use(videoDownloadRouter);
+router.use(dawProjectsRouter);
 
 export default router;

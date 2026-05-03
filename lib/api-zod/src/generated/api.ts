@@ -62,17 +62,11 @@ export const RemoveChannelParams = zod.object({
 /**
  * @summary List recent videos from favourite channels
  */
-export const listVideosQueryOrderDefault = `recent`;
-
 export const ListVideosQueryParams = zod.object({
   channelId: zod.coerce
     .number()
     .optional()
     .describe("Filter by specific channel DB id"),
-  order: zod
-    .enum(["recent", "popular"])
-    .default(listVideosQueryOrderDefault)
-    .describe("Sort order"),
 });
 
 export const ListVideosResponseItem = zod.object({
@@ -239,6 +233,50 @@ export const RequestUploadUrlResponse = zod.object({
 });
 
 /**
+ * @summary List all saved videos
+ */
+export const ListSavedVideosResponseItem = zod.object({
+  id: zod.number(),
+  videoId: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  thumbnailUrl: zod.string(),
+  channelId: zod.string(),
+  channelName: zod.string(),
+  channelThumbnailUrl: zod.string().nullish(),
+  viewCount: zod.string().nullish(),
+  duration: zod.string().nullish(),
+  publishedAt: zod.string(),
+  savedAt: zod.string(),
+});
+export const ListSavedVideosResponse = zod.array(ListSavedVideosResponseItem);
+
+/**
+ * @summary Save a video by URL
+ */
+export const SaveVideoBody = zod.object({
+  url: zod.string(),
+});
+
+/**
+ * @summary Check if a video is saved
+ */
+export const CheckSavedVideoParams = zod.object({
+  videoId: zod.coerce.string(),
+});
+
+export const CheckSavedVideoResponse = zod.object({
+  saved: zod.boolean(),
+});
+
+/**
+ * @summary Remove a saved video
+ */
+export const RemoveSavedVideoParams = zod.object({
+  videoId: zod.coerce.string(),
+});
+
+/**
  * @summary List all saved recordings
  */
 export const ListRecordingsResponseItem = zod.object({
@@ -273,34 +311,91 @@ export const DeleteRecordingParams = zod.object({
 });
 
 /**
- * @summary List saved videos
+ * @summary List all saved DAW projects
  */
-export const ListSavedVideosResponseItem = zod.object({
+export const ListDawProjectsResponseItem = zod.object({
   id: zod.number(),
-  videoId: zod.string(),
-  title: zod.string(),
-  description: zod.string(),
-  thumbnailUrl: zod.string(),
-  channelId: zod.string(),
-  channelName: zod.string(),
-  channelThumbnailUrl: zod.string().nullish(),
-  viewCount: zod.string().nullish(),
-  duration: zod.string().nullish(),
-  publishedAt: zod.coerce.date(),
-  savedAt: zod.coerce.date(),
+  name: zod.string(),
+  beatVideoId: zod.string(),
+  beatTitle: zod.string(),
+  beatChannelName: zod.string(),
+  beatThumbnailUrl: zod.string(),
+  lanes: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      color: zod.string(),
+      muted: zod.boolean(),
+      volume: zod.number(),
+      startOffset: zod.number(),
+      durationSec: zod.number(),
+      objectPath: zod.string().nullish(),
+      mime: zod.string(),
+    }),
+  ),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
 });
-export const ListSavedVideosResponse = zod.array(ListSavedVideosResponseItem);
+export const ListDawProjectsResponse = zod.array(ListDawProjectsResponseItem);
 
 /**
- * @summary Save a video by URL
+ * @summary Save a new DAW project
  */
-export const SaveVideoBody = zod.object({
-  url: zod.string().describe("YouTube video URL or video ID"),
+export const CreateDawProjectBody = zod.object({
+  name: zod.string(),
+  beatVideoId: zod.string(),
+  beatTitle: zod.string(),
+  beatChannelName: zod.string(),
+  beatThumbnailUrl: zod.string(),
+  lanes: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      color: zod.string(),
+      muted: zod.boolean(),
+      volume: zod.number(),
+      startOffset: zod.number(),
+      durationSec: zod.number(),
+      objectPath: zod.string().nullish(),
+      mime: zod.string(),
+    }),
+  ),
 });
 
 /**
- * @summary Remove a saved video
+ * @summary Get a single DAW project
  */
-export const RemoveSavedVideoParams = zod.object({
-  videoId: zod.string(),
+export const GetDawProjectParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetDawProjectResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  beatVideoId: zod.string(),
+  beatTitle: zod.string(),
+  beatChannelName: zod.string(),
+  beatThumbnailUrl: zod.string(),
+  lanes: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      color: zod.string(),
+      muted: zod.boolean(),
+      volume: zod.number(),
+      startOffset: zod.number(),
+      durationSec: zod.number(),
+      objectPath: zod.string().nullish(),
+      mime: zod.string(),
+    }),
+  ),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Delete a DAW project
+ */
+export const DeleteDawProjectParams = zod.object({
+  id: zod.coerce.number(),
 });

@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import {
   Play, Square, Circle, Volume2, ArrowLeft,
   Loader2, Pause, SkipBack, Mic, ZoomIn, ZoomOut,
+  CloudUpload, FolderOpen, Trash2, X, Check,
 } from "lucide-react";
 import type { Video } from "@workspace/api-client-react";
 
@@ -10,6 +11,7 @@ const BEAT_KEY = "tubefeed-daw-beat";
 const LANE_COLORS = ["#ef4444", "#22c55e", "#8b5cf6"];
 const LANE_NAMES  = ["Vocal 1", "Vocal 2", "Vocal 3"];
 const TIMELINE_SECS = 300;
+const TRACK_H = 76, RULER_H = 24, LEFT_W = 208;
 
 // ── YouTube IFrame API ────────────────────────────────────────────────────────
 let _ytLoaded = false, _ytReady = false;
@@ -45,6 +47,9 @@ function rulerInterval(zoom: number) {
   const nice = [0.5,1,2,5,10,15,30,60,120,300];
   return nice.find((v) => v >= 70 / zoom) ?? 300;
 }
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Lane = {
@@ -52,16 +57,30 @@ type Lane = {
   muted: boolean; volume: number;
   blobUrl: string | null; mime: string;
   waveform: number[]; durationSec: number;
-  startOffset: number;   // seconds from timeline start
+  startOffset: number;
+  objectPath: string | null; // set after cloud save/load
 };
 function makeLanes(): Lane[] {
   return LANE_NAMES.map((name, i) => ({
     id: i, name, color: LANE_COLORS[i],
     muted: false, volume: 80,
     blobUrl: null, mime: "audio/webm",
-    waveform: [], durationSec: 0, startOffset: 0,
+    waveform: [], durationSec: 0, startOffset: 0, objectPath: null,
   }));
 }
+
+type SavedProject = {
+  id: number; name: string;
+  beatVideoId: string; beatTitle: string;
+  beatChannelName: string; beatThumbnailUrl: string;
+  lanes: Array<{
+    id: number; name: string; color: string;
+    muted: boolean; volume: number;
+    startOffset: number; durationSec: number;
+    objectPath: string | null; mime: string;
+  }>;
+  createdAt: string; updatedAt: string;
+};
 
 // ── Waveform canvas ───────────────────────────────────────────────────────────
 function WaveCanvas({ data, color, widthPx }: { data: number[]; color: string; widthPx: number }) {
@@ -87,8 +106,6 @@ const BEAT_BARS = Array.from({ length: 200 }, (_, i) =>
   30 + Math.abs(Math.sin(i * 0.37) * 52 + Math.sin(i * 0.13 + 1) * 28)
 );
 
-const TRACK_H = 76, RULER_H = 24, LEFT_W = 208;
-
 // ── Main DAW page ─────────────────────────────────────────────────────────────
 export default function DawPage() {
   const [beat, setBeat]               = useState<Video | null>(null);
@@ -101,6 +118,13 @@ export default function DawPage() {
   const [micError, setMicError]       = useState(false);
   const [beatMuted, setBeatMuted]     = useState(false);
   const [zoom, setZoom]               = useState(50);
+  // Save / Projects
+  const [saveState, setSaveState]     = useState<"idle"|"saving"|"saved"|"error">("idle");
+  const [showProjects, setShowProjects] = useState(false);
+  const [projects, setProjects]       = useState<SavedProject[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [deletingId, setDeletingId]   = useState<number | null>(null);
+  const [loadingId, setLoadingId]     = useState<number | null>(null);
 
   const ytRef      = useRef<any>(null);
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -111,16 +135,15 @@ export default function DawPage() {
   const recLaneRef = useRef(-1);
   const audioEls   = useRef<(HTMLAudioElement | null)[]>([null, null, null]);
   const tlRef      = useRef<HTMLDivElement>(null);
-  const zoomRef    = useRef(50);       // stable zoom for event handlers
-  const lanesRef   = useRef(lanes);    // stable lanes ref
+  const zoomRef    = useRef(50);
+  const lanesRef   = useRef(lanes);
   const schedules  = useRef<ReturnType<typeof setTimeout>[]>([]);
   const dragRef    = useRef<{ laneId: number; startX: number; origOffset: number } | null>(null);
 
-  // keep refs in sync
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
   useEffect(() => { lanesRef.current = lanes; }, [lanes]);
 
-  // ── Load beat ──
+  // ── Load beat from sessionStorage on mount ──
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(BEAT_KEY);
@@ -128,21 +151,21 @@ export default function DawPage() {
     } catch { /* ignore */ }
   }, []);
 
-  // ── Boot YouTube player ──
+  // ── Boot YouTube player whenever beat changes ──
   useEffect(() => {
     if (!beat) return;
+    setYtReady(false);
+    if (ytRef.current) {
+      try { ytRef.current.destroy(); } catch (_) {}
+      ytRef.current = null;
+    }
     loadYT(() => {
-      if (ytRef.current) return;
       ytRef.current = new (window as any).YT.Player("daw-yt-player", {
         videoId: beat.videoId,
         playerVars: { autoplay: 0, controls: 0, modestbranding: 1, rel: 0 },
         events: { onReady: () => setYtReady(true) },
       });
     });
-    return () => {
-      try { ytRef.current?.destroy?.(); } catch (_) {}
-      ytRef.current = null; setYtReady(false);
-    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beat?.videoId]);
 
@@ -160,7 +183,7 @@ export default function DawPage() {
     if (px > el.scrollLeft + el.clientWidth - 60) el.scrollLeft = px - el.clientWidth / 3;
   }, [time, zoom, isPlaying]);
 
-  // ── Drag handlers (global, stable via ref) ──
+  // ── Drag handlers (global) ──
   useEffect(() => {
     function onMove(e: MouseEvent) {
       const d = dragRef.current;
@@ -177,8 +200,7 @@ export default function DawPage() {
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
   function clearSchedules() {
-    schedules.current.forEach(clearTimeout);
-    schedules.current = [];
+    schedules.current.forEach(clearTimeout); schedules.current = [];
   }
   function stopClock() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -192,10 +214,8 @@ export default function DawPage() {
     }, 16);
   }
 
-  // stopAll owns isRecording — onstop never touches it (avoids async race)
   function stopAll() {
-    clearSchedules();
-    stopClock();
+    clearSchedules(); stopClock();
     try { ytRef.current?.stopVideo?.(); } catch (_) {}
     audioEls.current.forEach((a) => { if (a) { a.pause(); a.currentTime = 0; } });
     if (mrRef.current?.state === "recording") {
@@ -215,7 +235,6 @@ export default function DawPage() {
       const delayMs = Math.max(0, (lane.startOffset - t) * 1000);
       const audioPos = Math.max(0, t - lane.startOffset);
       if (t < lane.startOffset) {
-        // Clip starts later — schedule it
         a.pause();
         const tid = setTimeout(() => { a.currentTime = 0; a.play().catch(() => {}); }, delayMs);
         schedules.current.push(tid);
@@ -239,36 +258,172 @@ export default function DawPage() {
         wf.push(Math.min(1, (s / blk) * 6));
       }
       await ac.close();
-      setLanes((p) => p.map((l) => l.id === laneId ? { ...l, waveform: wf, durationSec: buf.duration } : l));
+      setLanes((p) => p.map((l) => l.id === laneId
+        ? { ...l, waveform: wf, durationSec: buf.duration }
+        : l
+      ));
     } catch { /* ignore */ }
+  }
+
+  async function decodeWaveformFromUrl(url: string, laneId: number) {
+    try {
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      decodeWaveform(blob, laneId);
+    } catch { /* ignore */ }
+  }
+
+  // ── Cloud save ───────────────────────────────────────────────────────────────
+  async function uploadBlob(blobUrl: string, mime: string): Promise<string> {
+    const resp = await fetch(blobUrl);
+    const blob = await resp.blob();
+    // Step 1: request presigned URL
+    const urlRes = await fetch("/api/storage/uploads/request-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "vocal.webm", size: blob.size, contentType: mime }),
+    });
+    const { uploadURL, objectPath } = await urlRes.json();
+    // Step 2: PUT directly to GCS
+    await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": mime }, body: blob });
+    return objectPath as string;
+  }
+
+  async function handleSave() {
+    if (!beat) return;
+    setSaveState("saving");
+    try {
+      // Upload all recorded lanes in parallel
+      const lanesSave = await Promise.all(
+        lanesRef.current.map(async (lane) => {
+          let objectPath = lane.objectPath;
+          if (lane.blobUrl && lane.blobUrl.startsWith("blob:")) {
+            objectPath = await uploadBlob(lane.blobUrl, lane.mime);
+          }
+          return {
+            id: lane.id,
+            name: lane.name,
+            color: lane.color,
+            muted: lane.muted,
+            volume: lane.volume,
+            startOffset: lane.startOffset,
+            durationSec: lane.durationSec,
+            objectPath: objectPath ?? null,
+            mime: lane.mime,
+          };
+        })
+      );
+      // Persist objectPaths back to state so subsequent saves skip re-upload
+      setLanes((p) => p.map((l) => {
+        const saved = lanesSave.find((s) => s.id === l.id);
+        return saved ? { ...l, objectPath: saved.objectPath } : l;
+      }));
+      const name = `${beat.title.slice(0, 40)} | ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+      await fetch("/api/daw/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          beatVideoId: beat.videoId,
+          beatTitle: beat.title,
+          beatChannelName: beat.channelName,
+          beatThumbnailUrl: beat.thumbnailUrl,
+          lanes: lanesSave,
+        }),
+      });
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), 3000);
+      // Refresh projects list if panel is open
+      if (showProjects) fetchProjects();
+    } catch {
+      setSaveState("error");
+      setTimeout(() => setSaveState("idle"), 3000);
+    }
+  }
+
+  // ── Projects panel ───────────────────────────────────────────────────────────
+  async function fetchProjects() {
+    setProjectsLoading(true);
+    try {
+      const res = await fetch("/api/daw/projects");
+      setProjects(await res.json());
+    } catch { /* ignore */ }
+    setProjectsLoading(false);
+  }
+
+  function openProjects() {
+    setShowProjects(true);
+    fetchProjects();
+  }
+
+  async function handleLoadProject(project: SavedProject) {
+    setLoadingId(project.id);
+    stopAll();
+    // Restore beat
+    const newBeat: Video = {
+      videoId: project.beatVideoId,
+      title: project.beatTitle,
+      channelName: project.beatChannelName,
+      thumbnailUrl: project.beatThumbnailUrl,
+      description: "",
+      publishedAt: new Date().toISOString(),
+      channelId: "",
+    };
+    setBeat(newBeat);
+    setArmedLane(-1);
+    // Restore lanes (objectPaths → blobUrls)
+    const restoredLanes: Lane[] = LANE_NAMES.map((name, i) => {
+      const saved = project.lanes.find((l) => l.id === i);
+      const audioUrl = saved?.objectPath ? `/api/storage${saved.objectPath}` : null;
+      return {
+        id: i, name: saved?.name ?? name, color: saved?.color ?? LANE_COLORS[i],
+        muted: saved?.muted ?? false, volume: saved?.volume ?? 80,
+        blobUrl: audioUrl,
+        mime: saved?.mime ?? "audio/webm",
+        waveform: [], durationSec: saved?.durationSec ?? 0,
+        startOffset: saved?.startOffset ?? 0,
+        objectPath: saved?.objectPath ?? null,
+      };
+    });
+    setLanes(restoredLanes);
+    // Decode waveforms in background
+    restoredLanes.forEach((lane) => {
+      if (lane.blobUrl) decodeWaveformFromUrl(lane.blobUrl, lane.id);
+    });
+    setLoadingId(null);
+    setShowProjects(false);
+  }
+
+  async function handleDeleteProject(id: number) {
+    setDeletingId(id);
+    try {
+      await fetch(`/api/daw/projects/${id}`, { method: "DELETE" });
+      setProjects((p) => p.filter((proj) => proj.id !== id));
+    } catch { /* ignore */ }
+    setDeletingId(null);
   }
 
   // ── Transport ─────────────────────────────────────────────────────────────────
   async function handleRecord() {
     if (armedLane < 0 || !ytReady) return;
-    stopAll();
-    setMicError(false);
+    stopAll(); setMicError(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mime   = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
       const mr     = new MediaRecorder(stream, { mimeType: mime });
       mrRef.current = mr; chunksRef.current = []; recLaneRef.current = armedLane;
-
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mr.onstop = async () => {
-        // stopAll() is the sole owner of isRecording state — never touch it here.
-        // Always save the blob regardless of who triggered stop.
         const blob = new Blob(chunksRef.current, { type: mime });
         const url  = URL.createObjectURL(blob);
         const lid  = recLaneRef.current;
         setLanes((p) => p.map((l) => l.id === lid
-          ? { ...l, blobUrl: url, mime, startOffset: 0 }
+          ? { ...l, blobUrl: url, mime, startOffset: 0, objectPath: null }
           : l
         ));
         stream.getTracks().forEach((t) => t.stop());
         decodeWaveform(blob, lid);
       };
-
       mr.start(100);
       ytRef.current.seekTo(0, true); ytRef.current.playVideo();
       if (beatMuted) ytRef.current.mute();
@@ -317,17 +472,36 @@ export default function DawPage() {
   const totalWidth = TIMELINE_SECS * zoom;
   const playheadPx = time * zoom;
 
+  const hasAnyRecording = lanes.some((l) => l.blobUrl !== null);
+
   if (!beat) {
     return (
       <div className="min-h-screen bg-[#0e0e0e] flex flex-col items-center justify-center gap-4 text-white">
         <Mic className="w-12 h-12 text-gray-600" />
         <p className="text-gray-400 text-sm">No beat loaded.</p>
         <p className="text-gray-600 text-xs">Go to Beats, open a beat, then click "Open DAW".</p>
-        <Link href="/beats">
-          <span className="mt-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-sm cursor-pointer transition-colors">
-            Back to Beats
-          </span>
-        </Link>
+        <div className="flex gap-3 mt-2">
+          <Link href="/beats">
+            <span className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-sm cursor-pointer transition-colors">
+              Browse Beats
+            </span>
+          </Link>
+          <button
+            onClick={openProjects}
+            className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-sm transition-colors flex items-center gap-2"
+          >
+            <FolderOpen className="w-4 h-4" /> Open Saved Project
+          </button>
+        </div>
+        {/* Projects panel (no-beat state) */}
+        {showProjects && (
+          <ProjectsPanel
+            projects={projects} loading={projectsLoading}
+            deletingId={deletingId} loadingId={loadingId}
+            onClose={() => setShowProjects(false)}
+            onLoad={handleLoadProject} onDelete={handleDeleteProject}
+          />
+        )}
       </div>
     );
   }
@@ -344,6 +518,7 @@ export default function DawPage() {
         </Link>
         <div className="w-px h-5 bg-[#333]" />
 
+        {/* Playback controls */}
         <div className="flex items-center gap-1">
           <button onClick={stopAll} title="Stop / Rewind" className="p-2 rounded-lg hover:bg-white/10 transition-colors">
             <SkipBack className="w-4 h-4 text-gray-400" />
@@ -372,20 +547,23 @@ export default function DawPage() {
           </button>
         </div>
 
+        {/* Time display */}
         <div className="font-mono text-lg text-white tabular-nums bg-black/40 px-3 py-1 rounded-lg border border-[#2a2a2a] min-w-[90px] text-center">
           {fmtTime(time)}
         </div>
 
+        {/* Zoom */}
         <div className="flex items-center gap-1">
-          <button onClick={() => setZoom((z) => Math.max(8, z * 0.6))} className="p-2 rounded-lg hover:bg-white/10 transition-colors" title="Zoom out">
+          <button onClick={() => setZoom((z) => Math.max(8, z * 0.6))} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
             <ZoomOut className="w-4 h-4 text-gray-400" />
           </button>
           <span className="text-[10px] text-gray-600 w-12 text-center tabular-nums">{Math.round(zoom)}px/s</span>
-          <button onClick={() => setZoom((z) => Math.min(400, z * 1.667))} className="p-2 rounded-lg hover:bg-white/10 transition-colors" title="Zoom in">
+          <button onClick={() => setZoom((z) => Math.min(400, z * 1.667))} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
             <ZoomIn className="w-4 h-4 text-gray-400" />
           </button>
         </div>
 
+        {/* Beat info */}
         <div className="flex items-center gap-2 ml-1 min-w-0 flex-1">
           <img src={beat.thumbnailUrl} className="w-8 h-8 rounded object-cover shrink-0 border border-[#333]" alt="" />
           <div className="min-w-0">
@@ -394,18 +572,42 @@ export default function DawPage() {
           </div>
         </div>
 
-        <div className="shrink-0 flex items-center gap-2 text-xs">
-          {!ytReady && <span className="flex items-center gap-1 text-gray-500"><Loader2 className="w-3 h-3 animate-spin" />Loading…</span>}
-          {micError && <span className="text-red-400">Mic access denied</span>}
-          {isRecording && <span className="flex items-center gap-1.5 text-red-400 font-bold animate-pulse"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />REC</span>}
-          {armedLane >= 0 && !isRecording && (
-            <span className="text-[11px] px-2 py-0.5 rounded-full border border-red-600/40 text-red-400/80">{LANE_NAMES[armedLane]} armed</span>
-          )}
+        {/* Status + Save + Projects */}
+        <div className="shrink-0 flex items-center gap-2">
+          {!ytReady && <span className="flex items-center gap-1 text-gray-500 text-xs"><Loader2 className="w-3 h-3 animate-spin" />Loading…</span>}
+          {micError && <span className="text-red-400 text-xs">Mic denied</span>}
+          {isRecording && <span className="flex items-center gap-1.5 text-red-400 font-bold text-xs animate-pulse"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />REC</span>}
+
+          {/* Projects button */}
+          <button
+            onClick={openProjects}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-white/10 border border-[#2a2a2a] text-gray-400 hover:text-white transition-colors text-xs"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />Projects
+          </button>
+
+          {/* Save button */}
+          <button
+            onClick={handleSave}
+            disabled={!hasAnyRecording || saveState === "saving"}
+            title={!hasAnyRecording ? "Record something first" : "Save project to cloud"}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors disabled:opacity-40 ${
+              saveState === "saved" ? "bg-green-600 text-white" :
+              saveState === "error" ? "bg-red-600 text-white" :
+              saveState === "saving" ? "bg-blue-600/50 text-blue-300" :
+              "bg-blue-600 hover:bg-blue-500 text-white"
+            }`}
+          >
+            {saveState === "saving" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :
+             saveState === "saved"  ? <Check className="w-3.5 h-3.5" /> :
+             <CloudUpload className="w-3.5 h-3.5" />}
+            {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved!" : saveState === "error" ? "Error" : "Save"}
+          </button>
         </div>
       </div>
 
       {/* ── Main track area ── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
 
         {/* Left panels */}
         <div className="shrink-0 flex flex-col border-r border-[#2a2a2a] bg-[#161616]" style={{ width: LEFT_W }}>
@@ -428,9 +630,7 @@ export default function DawPage() {
               className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold transition-all shrink-0 border"
               style={beatMuted
                 ? { backgroundColor: "rgba(234,179,8,0.15)", borderColor: "rgba(234,179,8,0.4)", color: "#eab308" }
-                : { borderColor: "#2a2a2a", color: "#555" }
-              }
-              title={beatMuted ? "Unmute beat" : "Mute beat"}
+                : { borderColor: "#2a2a2a", color: "#555" }}
             >M</button>
           </div>
 
@@ -438,8 +638,8 @@ export default function DawPage() {
           {lanes.map((lane) => (
             <div
               key={lane.id}
-              className="shrink-0 flex items-center gap-2 px-3 bg-[#181818] border-b border-[#222] transition-colors"
-              style={{ height: TRACK_H, backgroundColor: armedLane === lane.id ? `${lane.color}0a` : undefined }}
+              className="shrink-0 flex items-center gap-2 px-3 border-b border-[#222] transition-colors"
+              style={{ height: TRACK_H, backgroundColor: armedLane === lane.id ? `${lane.color}0a` : "#181818" }}
             >
               <button
                 onClick={() => setArmedLane((p) => p === lane.id ? -1 : lane.id)}
@@ -469,8 +669,7 @@ export default function DawPage() {
                 className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold transition-all shrink-0 border"
                 style={lane.muted
                   ? { backgroundColor: "rgba(234,179,8,0.15)", borderColor: "rgba(234,179,8,0.4)", color: "#eab308" }
-                  : { borderColor: "#2a2a2a", color: "#555" }
-                }
+                  : { borderColor: "#2a2a2a", color: "#555" }}
               >M</button>
             </div>
           ))}
@@ -493,9 +692,7 @@ export default function DawPage() {
               {ticks.map((sec) => (
                 <div key={sec} className="absolute top-0" style={{ left: sec * zoom }}>
                   <div className="w-px bg-[#3a3a3a]" style={{ height: RULER_H }} />
-                  <span className="text-[9px] text-gray-500 absolute top-1" style={{ left: 2 }}>
-                    {fmtRuler(sec)}
-                  </span>
+                  <span className="text-[9px] text-gray-500 absolute top-1" style={{ left: 2 }}>{fmtRuler(sec)}</span>
                 </div>
               ))}
               {interval >= 2 && ticks.flatMap((sec) =>
@@ -508,11 +705,7 @@ export default function DawPage() {
             </div>
 
             {/* Click-to-seek overlay */}
-            <div
-              className="absolute z-10"
-              style={{ top: RULER_H, left: 0, right: 0, bottom: 0 }}
-              onClick={handleTimelineClick}
-            />
+            <div className="absolute z-10" style={{ top: RULER_H, left: 0, right: 0, bottom: 0 }} onClick={handleTimelineClick} />
 
             {/* Beat clip row */}
             <div className="relative border-b border-[#2a2a2a] overflow-hidden" style={{ height: TRACK_H, backgroundColor: "rgba(127,29,29,0.2)" }}>
@@ -545,7 +738,6 @@ export default function DawPage() {
                 >
                   {lane.blobUrl ? (
                     <>
-                      {/* Draggable clip */}
                       <div
                         className="absolute z-20"
                         style={{ top: 8, bottom: 8, left: clipLeft, width: clipW }}
@@ -559,16 +751,17 @@ export default function DawPage() {
                           style={{
                             backgroundColor: `${lane.color}14`,
                             border: `1px solid ${lane.color}40`,
-                            cursor: dragRef.current?.laneId === lane.id ? "grabbing" : "grab",
+                            cursor: "grab",
                           }}
                         >
                           <WaveCanvas data={lane.waveform} color={lane.color} widthPx={Math.max(1, clipW - 16)} />
                         </div>
-                        <div className="absolute top-1.5 left-2.5 flex items-center gap-1 z-10">
+                        <div className="absolute top-1.5 left-2.5 flex items-center gap-1 z-10 pointer-events-none">
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ color: lane.color, backgroundColor: `${lane.color}25` }}>
                             {lane.name}
                           </span>
                           {lane.durationSec > 0 && <span className="text-[10px] text-gray-600">{lane.durationSec.toFixed(1)}s</span>}
+                          {lane.objectPath && <span className="text-[9px] text-blue-400/60">☁</span>}
                         </div>
                       </div>
                       <audio ref={(el) => { audioEls.current[i] = el; }} src={lane.blobUrl} preload="auto" />
@@ -592,8 +785,7 @@ export default function DawPage() {
             <div className="absolute top-0 bottom-0 z-30 pointer-events-none" style={{ left: playheadPx, width: 2 }}>
               <div className="absolute inset-0 bg-white/80" style={{ top: RULER_H }} />
               <div className="absolute" style={{
-                top: RULER_H - 10, left: -5,
-                width: 0, height: 0,
+                top: RULER_H - 10, left: -5, width: 0, height: 0,
                 borderLeft: "6px solid transparent", borderRight: "6px solid transparent",
                 borderTop: "10px solid rgba(255,255,255,0.9)",
               }} />
@@ -603,6 +795,16 @@ export default function DawPage() {
             </div>
           </div>
         </div>
+
+        {/* Projects slide panel */}
+        {showProjects && (
+          <ProjectsPanel
+            projects={projects} loading={projectsLoading}
+            deletingId={deletingId} loadingId={loadingId}
+            onClose={() => setShowProjects(false)}
+            onLoad={handleLoadProject} onDelete={handleDeleteProject}
+          />
+        )}
       </div>
 
       {/* Hint bar */}
@@ -610,8 +812,91 @@ export default function DawPage() {
         <span>Click timeline to seek</span><span className="text-gray-800">·</span>
         <span>Drag clips to reposition</span><span className="text-gray-800">·</span>
         <span>● Arm → ● Record</span><span className="text-gray-800">·</span>
-        <span>▶ Play mix · M mute</span>
+        <span>Save uploads to cloud · ☁ = saved</span>
       </div>
     </div>
+  );
+}
+
+// ── Projects Panel ────────────────────────────────────────────────────────────
+function ProjectsPanel({
+  projects, loading, deletingId, loadingId, onClose, onLoad, onDelete,
+}: {
+  projects: SavedProject[];
+  loading: boolean;
+  deletingId: number | null;
+  loadingId: number | null;
+  onClose: () => void;
+  onLoad: (p: SavedProject) => void;
+  onDelete: (id: number) => void;
+}) {
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="absolute inset-0 z-40 bg-black/50" onClick={onClose} />
+      {/* Panel */}
+      <div className="absolute right-0 top-0 bottom-0 z-50 w-80 bg-[#1a1a1a] border-l border-[#2a2a2a] flex flex-col shadow-2xl">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a2a] shrink-0">
+          <div className="flex items-center gap-2">
+            <FolderOpen className="w-4 h-4 text-blue-400" />
+            <span className="text-sm font-bold text-white">Saved Projects</span>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-white/10 text-gray-500 hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center h-32 gap-2 text-gray-500 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-32 gap-2 text-gray-600 text-sm">
+              <CloudUpload className="w-8 h-8 text-gray-700" />
+              <p>No saved projects yet.</p>
+              <p className="text-xs">Record something and hit Save.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-[#222]">
+              {projects.map((proj) => {
+                const recordedCount = proj.lanes.filter((l) => l.objectPath).length;
+                return (
+                  <div key={proj.id} className="px-4 py-3 hover:bg-white/5 transition-colors group">
+                    <div className="flex items-start gap-3">
+                      <img src={proj.beatThumbnailUrl} className="w-10 h-10 rounded-lg object-cover shrink-0 border border-[#333]" alt="" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-white truncate">{proj.name}</p>
+                        <p className="text-[10px] text-gray-500 truncate">{proj.beatChannelName}</p>
+                        <p className="text-[10px] text-gray-700 mt-0.5">
+                          {recordedCount} vocal track{recordedCount !== 1 ? "s" : ""} · {fmtDate(proj.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-2.5">
+                      <button
+                        onClick={() => onLoad(proj)}
+                        disabled={loadingId === proj.id}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold transition-colors"
+                      >
+                        {loadingId === proj.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <FolderOpen className="w-3 h-3" />}
+                        {loadingId === proj.id ? "Loading…" : "Open"}
+                      </button>
+                      <button
+                        onClick={() => onDelete(proj.id)}
+                        disabled={deletingId === proj.id}
+                        className="w-8 flex items-center justify-center rounded-lg border border-[#2a2a2a] hover:bg-red-900/30 hover:border-red-600/40 text-gray-600 hover:text-red-400 disabled:opacity-50 transition-colors"
+                      >
+                        {deletingId === proj.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }

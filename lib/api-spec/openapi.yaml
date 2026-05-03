@@ -363,6 +363,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RequestUploadUrlResponse"
+  /saved:
+    get:
+      operationId: listSavedVideos
+      tags: [recordings]
+      summary: List all saved videos
+      responses:
+        "200":
+          description: List of saved videos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavedVideoItem"
+    post:
+      operationId: saveVideo
+      tags: [recordings]
+      summary: Save a video by URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveVideoBody"
+      responses:
+        "201":
+          description: Saved video
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedVideoItem"
+  /saved/{videoId}:
+    get:
+      operationId: checkSavedVideo
+      tags: [recordings]
+      summary: Check if a video is saved
+      parameters:
+        - in: path
+          name: videoId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Saved status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedVideoStatus"
+        "404":
+          description: Not saved
+    delete:
+      operationId: removeSavedVideo
+      tags: [recordings]
+      summary: Remove a saved video
+      parameters:
+        - in: path
+          name: videoId
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
   /recordings:
     get:
       operationId: listRecordings
@@ -399,6 +463,70 @@ paths:
       operationId: deleteRecording
       tags: [recordings]
       summary: Delete a recording
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+  /daw/projects:
+    get:
+      operationId: listDawProjects
+      tags: [recordings]
+      summary: List all saved DAW projects
+      responses:
+        "200":
+          description: List of DAW projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DawProjectItem"
+    post:
+      operationId: createDawProject
+      tags: [recordings]
+      summary: Save a new DAW project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDawProjectBody"
+      responses:
+        "201":
+          description: Created DAW project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DawProjectItem"
+  /daw/projects/{id}:
+    get:
+      operationId: getDawProject
+      tags: [recordings]
+      summary: Get a single DAW project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: DAW project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DawProjectItem"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteDawProject
+      tags: [recordings]
+      summary: Delete a DAW project
       parameters:
         - in: path
           name: id
@@ -602,3 +730,145 @@ components:
         - beatThumbnailUrl
         - objectPath
         - durationSeconds
+    DawLane:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        color:
+          type: string
+        muted:
+          type: boolean
+        volume:
+          type: number
+        startOffset:
+          type: number
+        durationSec:
+          type: number
+        objectPath:
+          type: string
+          nullable: true
+        mime:
+          type: string
+      required:
+        - id
+        - name
+        - color
+        - muted
+        - volume
+        - startOffset
+        - durationSec
+        - mime
+    DawProjectItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        beatVideoId:
+          type: string
+        beatTitle:
+          type: string
+        beatChannelName:
+          type: string
+        beatThumbnailUrl:
+          type: string
+        lanes:
+          type: array
+          items:
+            $ref: "#/components/schemas/DawLane"
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - beatVideoId
+        - beatTitle
+        - beatChannelName
+        - beatThumbnailUrl
+        - lanes
+        - createdAt
+        - updatedAt
+    SavedVideoItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        videoId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        thumbnailUrl:
+          type: string
+        channelId:
+          type: string
+        channelName:
+          type: string
+        channelThumbnailUrl:
+          type: string
+          nullable: true
+        viewCount:
+          type: string
+          nullable: true
+        duration:
+          type: string
+          nullable: true
+        publishedAt:
+          type: string
+        savedAt:
+          type: string
+      required:
+        - id
+        - videoId
+        - title
+        - description
+        - thumbnailUrl
+        - channelId
+        - channelName
+        - publishedAt
+        - savedAt
+    SaveVideoBody:
+      type: object
+      properties:
+        url:
+          type: string
+      required:
+        - url
+    SavedVideoStatus:
+      type: object
+      properties:
+        saved:
+          type: boolean
+      required:
+        - saved
+    CreateDawProjectBody:
+      type: object
+      properties:
+        name:
+          type: string
+        beatVideoId:
+          type: string
+        beatTitle:
+          type: string
+        beatChannelName:
+          type: string
+        beatThumbnailUrl:
+          type: string
+        lanes:
+          type: array
+          items:
+            $ref: "#/components/schemas/DawLane"
+      required:
+        - name
+        - beatVideoId
+        - beatTitle
+        - beatChannelName
+        - beatThumbnailUrl
+        - lanes

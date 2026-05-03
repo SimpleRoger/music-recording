@@ -89,6 +89,62 @@ export interface CreateRecordingBody {
   durationSeconds: number;
 }
 
+export interface DawLane {
+  id: number;
+  name: string;
+  color: string;
+  muted: boolean;
+  volume: number;
+  startOffset: number;
+  durationSec: number;
+  objectPath?: string | null;
+  mime: string;
+}
+
+export interface DawProjectItem {
+  id: number;
+  name: string;
+  beatVideoId: string;
+  beatTitle: string;
+  beatChannelName: string;
+  beatThumbnailUrl: string;
+  lanes: DawLane[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedVideoItem {
+  id: number;
+  videoId: string;
+  title: string;
+  description: string;
+  thumbnailUrl: string;
+  channelId: string;
+  channelName: string;
+  channelThumbnailUrl?: string | null;
+  viewCount?: string | null;
+  duration?: string | null;
+  publishedAt: string;
+  savedAt: string;
+}
+
+export interface SaveVideoBody {
+  url: string;
+}
+
+export interface SavedVideoStatus {
+  saved: boolean;
+}
+
+export interface CreateDawProjectBody {
+  name: string;
+  beatVideoId: string;
+  beatTitle: string;
+  beatChannelName: string;
+  beatThumbnailUrl: string;
+  lanes: DawLane[];
+}
+
 export type SearchChannelsParams = {
   /**
    * Search query
@@ -101,10 +157,6 @@ export type ListVideosParams = {
    * Filter by specific channel DB id
    */
   channelId?: number;
-  /**
-   * Sort order: recent (last 3 months by date) or popular (all-time by view count)
-   */
-  order?: "recent" | "popular";
 };
 
 export type SearchBeatChannelsParams = {
@@ -139,23 +191,3 @@ export const SearchBeatsOrder = {
 export type GetSimilarBeatsParams = {
   title: string;
 };
-
-export interface SavedVideoItem {
-  id: number;
-  videoId: string;
-  title: string;
-  description: string;
-  thumbnailUrl: string;
-  channelId: string;
-  channelName: string;
-  channelThumbnailUrl?: string | null;
-  viewCount?: string | null;
-  duration?: string | null;
-  publishedAt: string;
-  savedAt: string;
-}
-
-export interface SaveVideoBody {
-  /** YouTube video URL or video ID */
-  url: string;
-}
