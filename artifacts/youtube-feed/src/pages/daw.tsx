@@ -187,6 +187,7 @@ export default function DawPage() {
   const [bpm, setBpm]                   = useState(120);
   const [detectingBpm, setDetectingBpm] = useState(false);
   const [bpmStatus, setBpmStatus]       = useState<"idle"|"ok"|"err">("idle");
+  const [bpmErrMsg, setBpmErrMsg]       = useState("");
 
   const ytRef      = useRef<any>(null);
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -664,21 +665,33 @@ export default function DawPage() {
     if (!beat?.videoId) return;
     setDetectingBpm(true);
     setBpmStatus("idle");
+    setBpmErrMsg("");
     try {
       const res = await fetch(`${import.meta.env.BASE_URL}api/detect-bpm/${beat.videoId}`);
-      if (!res.ok) throw new Error("detection failed");
-      const { bpm: detected } = await res.json() as { bpm: number };
-      if (detected && detected > 0) {
-        setBpm(detected);
+      const body = await res.json() as { bpm?: number; error?: string };
+      if (!res.ok || body.error) {
+        const msg = body.error ?? "Detection failed";
+        const friendly = msg.includes("Sign in") || msg.includes("bot")
+          ? "YouTube blocked this video — try a different beat"
+          : msg.includes("No audio")
+          ? "Could not download audio for this video"
+          : "BPM detection failed";
+        setBpmErrMsg(friendly);
+        setBpmStatus("err");
+        setTimeout(() => setBpmStatus("idle"), 4000);
+      } else if (body.bpm && body.bpm > 0) {
+        setBpm(body.bpm);
         setBpmStatus("ok");
         setTimeout(() => setBpmStatus("idle"), 3000);
       } else {
+        setBpmErrMsg("Could not determine BPM");
         setBpmStatus("err");
-        setTimeout(() => setBpmStatus("idle"), 3000);
+        setTimeout(() => setBpmStatus("idle"), 4000);
       }
     } catch {
+      setBpmErrMsg("Network error");
       setBpmStatus("err");
-      setTimeout(() => setBpmStatus("idle"), 3000);
+      setTimeout(() => setBpmStatus("idle"), 4000);
     }
     setDetectingBpm(false);
   }
@@ -923,7 +936,9 @@ export default function DawPage() {
         </div>
 
         {/* BPM */}
-        <div className={`flex items-center gap-0.5 px-2 py-1 rounded-lg border transition-colors ${
+        <div
+          title={bpmStatus === "err" ? bpmErrMsg : undefined}
+          className={`flex items-center gap-0.5 px-2 py-1 rounded-lg border transition-colors ${
           detectingBpm ? "bg-violet-950/60 border-violet-700/60" :
           bpmStatus === "ok" ? "bg-green-950/60 border-green-700/60" :
           bpmStatus === "err" ? "bg-red-950/60 border-red-700/60" :
@@ -948,7 +963,7 @@ export default function DawPage() {
                 className="text-gray-500 hover:text-white w-4 text-center leading-none select-none"
               >+</button>
               <span className={`text-[10px] ml-0.5 ${bpmStatus === "ok" ? "text-green-500" : bpmStatus === "err" ? "text-red-500" : "text-gray-600"}`}>
-                {bpmStatus === "ok" ? "✓ BPM" : bpmStatus === "err" ? "failed" : "BPM"}
+                {bpmStatus === "ok" ? "✓ BPM" : bpmStatus === "err" ? "blocked" : "BPM"}
               </span>
               <button
                 onClick={detectBeatBpm}

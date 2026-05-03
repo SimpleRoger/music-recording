@@ -37,17 +37,17 @@ router.get("/detect-key/:videoId", async (req, res) => {
       child.on("close", (code) => {
         clearTimeout(timer);
         const stdout = Buffer.concat(out).toString().trim();
-        if (code !== 0 || !stdout) {
-          reject(new Error(Buffer.concat(err).toString().trim() || "Script failed"));
-          return;
+        const stderr = Buffer.concat(err).toString().trim();
+        // Always try to parse stdout first — the Python script writes error JSON there
+        if (stdout) {
+          try {
+            const parsed = JSON.parse(stdout);
+            if (parsed.error) { reject(new Error(parsed.error)); return; }
+            resolve(parsed as { note: string; mode: string });
+            return;
+          } catch { /* fall through */ }
         }
-        try {
-          const parsed = JSON.parse(stdout);
-          if (parsed.error) reject(new Error(parsed.error));
-          else resolve(parsed as { note: string; mode: string });
-        } catch {
-          reject(new Error("Bad JSON from script"));
-        }
+        reject(new Error(stderr || "Script produced no output"));
       });
     });
 
