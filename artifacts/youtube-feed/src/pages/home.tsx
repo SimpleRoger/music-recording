@@ -1,14 +1,13 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import {
   Plus, Youtube, AlertCircle, RefreshCw, Music2, FileText,
-  Mic, Clock, Flame, Bookmark, Wand2, Search, X, Loader2, Dumbbell, Sliders,
+  Mic, Clock, Flame, Bookmark, Wand2, Dumbbell, Sliders,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { cn } from "../lib/utils";
 import { useVideos } from "../hooks/use-videos";
 import { useChannels } from "../hooks/use-channels";
-import { useVideoSearch } from "../hooks/use-video-search";
 import { VideoCard } from "../components/video-card";
 import { VideoSkeleton } from "../components/video-skeleton";
 import { ChannelSidebar } from "../components/channel-sidebar";
@@ -22,40 +21,10 @@ export default function Home() {
   const [activeVideo, setActiveVideo] = useState<Video | null>(null);
   const [order, setOrder] = useState<"recent" | "popular">("recent");
 
-  // Search state
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [inputValue, setInputValue] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const { state: searchState, search, clear: clearSearch } = useVideoSearch();
-
   const { data: channels } = useChannels();
   const { data: videos, isLoading: isVideosLoading, isError, error, refetch } = useVideos(selectedChannelId, order);
 
   const isKeyError = isError && String(error).toLowerCase().includes("key");
-  const isSearching = searchState.status !== "idle";
-
-  const openSearch = useCallback(() => {
-    setSearchOpen(true);
-    setTimeout(() => inputRef.current?.focus(), 50);
-  }, []);
-
-  const closeSearch = useCallback(() => {
-    setSearchOpen(false);
-    setInputValue("");
-    clearSearch();
-  }, [clearSearch]);
-
-  const handleSearchSubmit = useCallback((e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (inputValue.trim()) search(inputValue.trim());
-  }, [inputValue, search]);
-
-  // Close on Escape
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape" && searchOpen) closeSearch(); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [searchOpen, closeSearch]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
@@ -74,11 +43,8 @@ export default function Home() {
             </h1>
           </div>
 
-          {/* Nav tabs — hidden when search bar is open on small screens */}
-          <nav className={cn(
-            "flex items-center gap-1 bg-surface/60 border border-border rounded-xl px-1.5 py-1 transition-all",
-            searchOpen ? "hidden xl:flex" : "flex",
-          )}>
+          {/* Nav tabs */}
+          <nav className="flex items-center gap-1 bg-surface/60 border border-border rounded-xl px-1.5 py-1">
             <span className="px-3 py-1 rounded-lg text-sm font-semibold bg-primary/15 text-primary border border-primary/20">
               Feed
             </span>
@@ -120,63 +86,8 @@ export default function Home() {
           </nav>
         </div>
 
-        {/* Right side: search + add channel */}
+        {/* Right side: add channel */}
         <div className="flex items-center gap-2 shrink-0">
-          <AnimatePresence mode="wait">
-            {searchOpen ? (
-              <motion.form
-                key="search-bar"
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: "auto" }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={{ duration: 0.2 }}
-                onSubmit={handleSearchSubmit}
-                className="flex items-center gap-2"
-              >
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
-                  <input
-                    ref={inputRef}
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    placeholder="Search YouTube…"
-                    className="h-9 pl-9 pr-4 w-48 sm:w-72 bg-surface border border-border rounded-xl text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:border-primary/50 transition-colors"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={!inputValue.trim() || searchState.status === "loading"}
-                  className="h-9 px-4 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-all flex items-center gap-1.5"
-                >
-                  {searchState.status === "loading"
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <Search className="w-4 h-4" />}
-                  Search
-                </button>
-                <button
-                  type="button"
-                  onClick={closeSearch}
-                  className="h-9 w-9 flex items-center justify-center rounded-xl text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors"
-                  title="Close search"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </motion.form>
-            ) : (
-              <motion.button
-                key="search-icon"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={openSearch}
-                className="h-9 w-9 flex items-center justify-center rounded-xl text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors"
-                title="Search YouTube"
-              >
-                <Search className="w-5 h-5" />
-              </motion.button>
-            )}
-          </AnimatePresence>
-
           <button
             onClick={() => setIsAddModalOpen(true)}
             className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-lg font-medium text-sm transition-all shadow-[0_0_15px_rgba(255,0,0,0.3)] hover:shadow-[0_0_20px_rgba(255,0,0,0.5)] flex items-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -188,106 +99,19 @@ export default function Home() {
       </header>
 
       <div className="flex-1 flex max-w-[1800px] w-full mx-auto relative">
-        {/* Desktop Sidebar — hidden during search */}
-        {!isSearching && (
-          <aside className="hidden lg:block w-72 shrink-0 border-r border-border p-6 h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto">
-            <ChannelSidebar
-              layout="vertical"
-              selectedId={selectedChannelId}
-              onSelect={setSelectedChannelId}
-              onAddClick={() => setIsAddModalOpen(true)}
-            />
-          </aside>
-        )}
+        {/* Desktop Sidebar */}
+        <aside className="hidden lg:block w-72 shrink-0 border-r border-border p-6 h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto">
+          <ChannelSidebar
+            layout="vertical"
+            selectedId={selectedChannelId}
+            onSelect={setSelectedChannelId}
+            onAddClick={() => setIsAddModalOpen(true)}
+          />
+        </aside>
 
         {/* Main Content Area */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0">
-
-          {/* ── SEARCH RESULTS ── */}
-          <AnimatePresence mode="wait">
-            {isSearching && (
-              <motion.div key="search-results" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                {/* Header row */}
-                <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
-                  <div>
-                    <h2 className="text-2xl font-display font-bold text-text-main">
-                      {searchState.status === "loading"
-                        ? "Searching…"
-                        : `Results for "${searchState.query}"`}
-                    </h2>
-                    {searchState.status === "done" && (
-                      <p className="text-text-muted text-sm mt-0.5">
-                        {searchState.results.length} video{searchState.results.length !== 1 ? "s" : ""} found
-                      </p>
-                    )}
-                  </div>
-                  <button
-                    onClick={closeSearch}
-                    className="flex items-center gap-1.5 text-sm text-text-muted hover:text-text-main transition-colors"
-                  >
-                    <X className="w-4 h-4" /> Back to feed
-                  </button>
-                </div>
-
-                {/* Loading skeleton */}
-                {searchState.status === "loading" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8 sm:gap-x-6">
-                    {Array.from({ length: 10 }).map((_, i) => <VideoSkeleton key={i} />)}
-                  </div>
-                )}
-
-                {/* Disabled */}
-                {searchState.status === "disabled" && (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <AlertCircle className="w-10 h-10 text-text-muted/50 mb-4" />
-                    <p className="text-text-main font-semibold mb-1">Search is temporarily disabled</p>
-                    <p className="text-text-muted text-sm">Check back soon.</p>
-                  </div>
-                )}
-
-                {/* Error */}
-                {searchState.status === "error" && (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <AlertCircle className="w-10 h-10 text-primary mb-4" />
-                    <p className="text-text-muted">{searchState.error}</p>
-                    <button
-                      onClick={() => search(searchState.query)}
-                      className="mt-4 px-4 py-2 bg-surface-hover hover:bg-border rounded-xl text-sm font-medium transition-colors"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                )}
-
-                {/* No results */}
-                {searchState.status === "done" && searchState.results.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <Youtube className="w-10 h-10 text-text-muted/50 mb-4" />
-                    <p className="text-text-muted">No videos found for "{searchState.query}"</p>
-                  </div>
-                )}
-
-                {/* Results grid */}
-                {searchState.status === "done" && searchState.results.length > 0 && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8 sm:gap-x-6">
-                    {searchState.results.map((video, i) => (
-                      <motion.div
-                        key={`${video.videoId}-${i}`}
-                        initial={{ opacity: 0, y: 16 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: Math.min(i * 0.04, 0.4) }}
-                      >
-                        <VideoCard video={video} onClick={setActiveVideo} />
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-              </motion.div>
-            )}
-
-            {/* ── NORMAL FEED ── */}
-            {!isSearching && (
-              <motion.div key="feed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 {/* Mobile channel list */}
                 <div className="block lg:hidden mb-6 overflow-x-auto pb-4 -mx-4 px-4 sm:-mx-6 sm:px-6 hide-scrollbar relative">
                   <ChannelSidebar
@@ -379,22 +203,14 @@ export default function Home() {
                     </div>
                     <h2 className="text-3xl font-display font-bold text-text-main mb-3">Your Feed is Empty</h2>
                     <p className="text-text-muted max-w-md mb-8 text-lg">
-                      Add your favorite creators to see their latest videos, or use the search button to find any video on YouTube.
+                      Add your favorite creators to see their latest videos here.
                     </p>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="bg-primary hover:bg-primary-hover text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5"
-                      >
-                        Add Your First Channel
-                      </button>
-                      <button
-                        onClick={openSearch}
-                        className="px-8 py-4 rounded-xl font-semibold text-lg border border-border hover:bg-surface-hover transition-all flex items-center gap-2 text-text-muted hover:text-text-main"
-                      >
-                        <Search className="w-5 h-5" /> Search
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => setIsAddModalOpen(true)}
+                      className="bg-primary hover:bg-primary-hover text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5"
+                    >
+                      Add Your First Channel
+                    </button>
                   </motion.div>
                 ) : videos?.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 text-center px-4">
@@ -422,9 +238,7 @@ export default function Home() {
                     ))}
                   </div>
                 )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          </motion.div>
         </main>
       </div>
 
