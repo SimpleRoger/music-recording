@@ -129,6 +129,7 @@ export default function DawPage() {
   const mrRef      = useRef<MediaRecorder | null>(null);
   const chunksRef  = useRef<Blob[]>([]);
   const recLaneRef = useRef(-1);
+  const recIdRef   = useRef(0); // bumped on every stopAll so stale onstop can't corrupt state
   const audioEls   = useRef<(HTMLAudioElement | null)[]>([null, null, null]);
   const tlRef      = useRef<HTMLDivElement>(null); // scrollable timeline
 
@@ -189,6 +190,7 @@ export default function DawPage() {
     }, 16);
   }
   function stopAll() {
+    recIdRef.current++;          // invalidate any in-flight onstop callbacks
     stopClock();
     try { ytRef.current?.stopVideo?.(); } catch (_) {}
     audioEls.current.forEach((a) => { if (a) { a.pause(); a.currentTime = 0; } });
@@ -247,8 +249,9 @@ export default function DawPage() {
   // ── Transport ──
   async function handleRecord() {
     if (armedLane < 0 || !ytReady) return;
-    stopAll();
+    stopAll();                        // bumps recIdRef, sets isRecording false
     setMicError(false);
+    const myId = ++recIdRef.current;  // stamp for THIS recording session
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mime   = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -257,12 +260,14 @@ export default function DawPage() {
       mrRef.current = mr; chunksRef.current = []; recLaneRef.current = armedLane;
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mr.onstop = async () => {
+        // Always save the audio — but only clear recording state if no newer
+        // recording/stopAll has superseded us (prevents the stuck-REC bug)
         const blob = new Blob(chunksRef.current, { type: mime });
         const url  = URL.createObjectURL(blob);
         const lid  = recLaneRef.current;
         setLanes((p) => p.map((l) => l.id === lid ? { ...l, blobUrl: url, mime } : l));
         stream.getTracks().forEach((t) => t.stop());
-        setIsRecording(false);
+        if (recIdRef.current === myId) setIsRecording(false);
         decodeWaveform(blob, lid);
       };
       mr.start(100);
