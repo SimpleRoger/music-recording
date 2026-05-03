@@ -14,19 +14,38 @@ def read_wav_mono(path):
         sr = wf.getframerate()
         n_frames = wf.getnframes()
         raw = wf.readframes(n_frames)
+
+    # Fast path — numpy (always available in pythonlibs)
+    try:
+        import numpy as np
+        if sw == 2:
+            data = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+        elif sw == 4:
+            data = np.frombuffer(raw, dtype="<i4").astype(np.float32) / 2147483648.0
+        else:
+            data = np.frombuffer(raw, dtype=np.uint8).astype(np.float32) / 128.0 - 1.0
+        if n_ch > 1:
+            data = data.reshape(-1, n_ch).mean(axis=1)
+        return data.tolist(), sr
+    except ImportError:
+        pass
+
+    # Pure-Python fallback (fixed — was O(n²) before)
     total = n_frames * n_ch
     if sw == 2:
-        samples = list(struct.unpack(f"<{total}h", raw))
-        samples = [s / 32768.0 for s in samples]
+        flat = list(struct.unpack(f"<{total}h", raw))
+        scale = 32768.0
     elif sw == 4:
-        samples = list(struct.unpack(f"<{total}i", raw))
-        samples = [s / 2147483648.0 for s in samples]
+        flat = list(struct.unpack(f"<{total}i", raw))
+        scale = 2147483648.0
     else:
-        samples = [b / 128.0 - 1.0 for b in raw]
+        flat = [b - 128 for b in raw]
+        scale = 128.0
+    flat_f = [s / scale for s in flat]
     if n_ch > 1:
-        mono = [sum(samples[i::n_ch]) / n_ch for i in range(n_frames)]
+        mono = [sum(flat_f[i * n_ch:(i + 1) * n_ch]) / n_ch for i in range(n_frames)]
     else:
-        mono = samples
+        mono = flat_f
     return mono, sr
 
 
