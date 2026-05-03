@@ -186,6 +186,7 @@ export default function DawPage() {
   const [detectingKey, setDetectingKey] = useState(false);
   const [bpm, setBpm]                   = useState(120);
   const [detectingBpm, setDetectingBpm] = useState(false);
+  const [bpmStatus, setBpmStatus]       = useState<"idle"|"ok"|"err">("idle");
 
   const ytRef      = useRef<any>(null);
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -662,12 +663,23 @@ export default function DawPage() {
   async function detectBeatBpm() {
     if (!beat?.videoId) return;
     setDetectingBpm(true);
+    setBpmStatus("idle");
     try {
       const res = await fetch(`${import.meta.env.BASE_URL}api/detect-bpm/${beat.videoId}`);
       if (!res.ok) throw new Error("detection failed");
       const { bpm: detected } = await res.json() as { bpm: number };
-      if (detected && detected > 0) setBpm(detected);
-    } catch { /* silent */ }
+      if (detected && detected > 0) {
+        setBpm(detected);
+        setBpmStatus("ok");
+        setTimeout(() => setBpmStatus("idle"), 3000);
+      } else {
+        setBpmStatus("err");
+        setTimeout(() => setBpmStatus("idle"), 3000);
+      }
+    } catch {
+      setBpmStatus("err");
+      setTimeout(() => setBpmStatus("idle"), 3000);
+    }
     setDetectingBpm(false);
   }
 
@@ -911,25 +923,43 @@ export default function DawPage() {
         </div>
 
         {/* BPM */}
-        <div className="flex items-center gap-0.5 bg-black/40 px-2 py-1 rounded-lg border border-[#2a2a2a]">
-          <button
-            onClick={() => setBpm((b) => Math.max(40, b - 1))}
-            className="text-gray-500 hover:text-white w-4 text-center leading-none select-none"
-          >−</button>
-          <span className="text-[11px] font-mono text-white tabular-nums w-8 text-center">{bpm}</span>
-          <button
-            onClick={() => setBpm((b) => Math.min(300, b + 1))}
-            className="text-gray-500 hover:text-white w-4 text-center leading-none select-none"
-          >+</button>
-          <span className="text-[10px] text-gray-600 ml-0.5">BPM</span>
-          <button
-            onClick={detectBeatBpm}
-            disabled={detectingBpm || !beat}
-            title="Auto-detect BPM from beat"
-            className="ml-1.5 text-violet-400 hover:text-violet-300 disabled:opacity-40 transition-colors"
-          >
-            {detectingBpm ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
-          </button>
+        <div className={`flex items-center gap-0.5 px-2 py-1 rounded-lg border transition-colors ${
+          detectingBpm ? "bg-violet-950/60 border-violet-700/60" :
+          bpmStatus === "ok" ? "bg-green-950/60 border-green-700/60" :
+          bpmStatus === "err" ? "bg-red-950/60 border-red-700/60" :
+          "bg-black/40 border-[#2a2a2a]"
+        }`}>
+          {detectingBpm ? (
+            <span className="flex items-center gap-1.5 text-[10px] text-violet-300 px-1">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Analyzing beat…
+            </span>
+          ) : (
+            <>
+              <button
+                onClick={() => setBpm((b) => Math.max(40, b - 1))}
+                className="text-gray-500 hover:text-white w-4 text-center leading-none select-none"
+              >−</button>
+              <span className={`text-[11px] font-mono tabular-nums w-8 text-center ${bpmStatus === "ok" ? "text-green-300" : bpmStatus === "err" ? "text-red-400" : "text-white"}`}>
+                {bpmStatus === "err" ? "Err" : bpm}
+              </span>
+              <button
+                onClick={() => setBpm((b) => Math.min(300, b + 1))}
+                className="text-gray-500 hover:text-white w-4 text-center leading-none select-none"
+              >+</button>
+              <span className={`text-[10px] ml-0.5 ${bpmStatus === "ok" ? "text-green-500" : bpmStatus === "err" ? "text-red-500" : "text-gray-600"}`}>
+                {bpmStatus === "ok" ? "✓ BPM" : bpmStatus === "err" ? "failed" : "BPM"}
+              </span>
+              <button
+                onClick={detectBeatBpm}
+                disabled={!beat}
+                title="Auto-detect BPM from beat audio (~30s)"
+                className="ml-1.5 text-violet-400 hover:text-violet-300 disabled:opacity-40 transition-colors"
+              >
+                <Wand2 className="w-3 h-3" />
+              </button>
+            </>
+          )}
         </div>
 
         {/* Beat info */}
