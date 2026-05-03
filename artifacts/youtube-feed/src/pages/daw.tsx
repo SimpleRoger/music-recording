@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import {
   Play, Square, Circle, Volume2, ArrowLeft,
   Loader2, Pause, SkipBack, Mic, ZoomIn, ZoomOut,
-  CloudUpload, FolderOpen, Trash2, X, Check, Download, SlidersHorizontal, RotateCcw,
+  CloudUpload, FolderOpen, Trash2, X, Check, Download, SlidersHorizontal, RotateCcw, Wand2,
 } from "lucide-react";
 import type { Video } from "@workspace/api-client-react";
 
@@ -117,14 +117,20 @@ type EffectChain = {
   compressor: DynamicsCompressorNode; output: GainNode;
 };
 function defaultFx(): LaneFx {
-  return { eq: { low: 0, mid: 0, high: 0 }, comp: { enabled: false, threshold: -18, ratio: 4 }, autotune: { enabled: false, amount: 50, key: "Chromatic" } };
+  return { eq: { low: 0, mid: 0, high: 0 }, comp: { enabled: false, threshold: -18, ratio: 4 }, autotune: { enabled: false, amount: 50, key: "C Major" } };
 }
-const AUTOTUNE_KEYS: Record<string, number[]> = {
-  Chromatic: [0,1,2,3,4,5,6,7,8,9,10,11],
-  C:[0,2,4,5,7,9,11], Db:[1,3,5,6,8,10,0], D:[2,4,6,7,9,11,1], Eb:[3,5,7,8,10,0,2],
-  E:[4,6,8,9,11,1,3], F:[5,7,9,10,0,2,4], "F#":[6,8,10,11,1,3,5], G:[7,9,11,0,2,4,6],
-  Ab:[8,10,0,1,3,5,7], A:[9,11,1,2,4,6,8], Bb:[10,0,2,3,5,7,9], B:[11,1,3,4,6,8,10],
-};
+const NOTE_ROOTS = ["C","Db","D","Eb","E","F","F#","G","Ab","A","Bb","B"] as const;
+const MAJOR_STEPS = [0,2,4,5,7,9,11];
+const MINOR_STEPS = [0,2,3,5,7,8,10];
+function buildAutotuneKeys(): Record<string, number[]> {
+  const keys: Record<string, number[]> = { Chromatic: [0,1,2,3,4,5,6,7,8,9,10,11] };
+  NOTE_ROOTS.forEach((root, i) => {
+    keys[`${root} Major`] = MAJOR_STEPS.map(v => (v + i) % 12);
+    keys[`${root} Minor`] = MINOR_STEPS.map(v => (v + i) % 12);
+  });
+  return keys;
+}
+const AUTOTUNE_KEYS = buildAutotuneKeys();
 function detectPitchAC(buf: Float32Array, sr: number): number | null {
   const N = Math.min(buf.length, 2048);
   let rms = 0; for (let i = 0; i < N; i++) rms += buf[i] * buf[i]; rms = Math.sqrt(rms / N);
@@ -171,6 +177,7 @@ export default function DawPage() {
   const [lanesFx, setLanesFx]         = useState<LaneFx[]>(() => [0,1,2].map(defaultFx));
   const [fxLane, setFxLane]           = useState<number | null>(null);
   const [autotuneProcessing, setAutotuneProcessing] = useState<Set<number>>(new Set());
+  const [detectingKey, setDetectingKey] = useState(false);
 
   const ytRef      = useRef<any>(null);
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -628,6 +635,19 @@ export default function DawPage() {
     decodeWaveformFromUrl(orig, laneId);
     origBlobsRef.current[laneId] = null;
     updateFxForLane(laneId, (fx) => ({ ...fx, autotune: { ...fx.autotune, enabled: false } }));
+  }
+
+  // ── Detect key from beat audio ───────────────────────────────────────────────
+  async function detectBeatKey(laneId: number) {
+    if (!beat?.videoId) return;
+    setDetectingKey(true);
+    try {
+      const res = await fetch(`${import.meta.env.BASE_URL}api/detect-key/${beat.videoId}`);
+      if (!res.ok) throw new Error("detection failed");
+      const { note, mode } = await res.json() as { note: string; mode: string };
+      updateFxForLane(laneId, (fx) => ({ ...fx, autotune: { ...fx.autotune, key: `${note} ${mode}` } }));
+    } catch { /* silent */ }
+    setDetectingKey(false);
   }
 
   // ── Projects panel ───────────────────────────────────────────────────────────
@@ -1133,10 +1153,13 @@ export default function DawPage() {
             fx={lanesFx[fxLane]}
             processing={autotuneProcessing.has(fxLane)}
             hasOriginal={origBlobsRef.current[fxLane] !== null}
+            hasBeat={!!beat}
+            detectingKey={detectingKey}
             onClose={() => setFxLane(null)}
             onFxChange={(updater, rebuild) => updateFxForLane(fxLane!, updater, rebuild)}
             onApplyAutotune={() => applyAutotune(fxLane!)}
             onRevertAutotune={() => revertAutotune(fxLane!)}
+            onDetectKey={() => detectBeatKey(fxLane!)}
           />
         )}
       </div>
@@ -1177,16 +1200,19 @@ function FxSlider({ label, value, min, max, step, unit, onChange }: {
 }
 
 function FxPanel({
-  lane, fx, processing, hasOriginal, onClose, onFxChange, onApplyAutotune, onRevertAutotune,
+  lane, fx, processing, hasOriginal, hasBeat, detectingKey, onClose, onFxChange, onApplyAutotune, onRevertAutotune, onDetectKey,
 }: {
   lane: Lane;
   fx: LaneFx;
   processing: boolean;
   hasOriginal: boolean;
+  hasBeat: boolean;
+  detectingKey: boolean;
   onClose: () => void;
   onFxChange: (updater: (fx: LaneFx) => LaneFx, rebuild?: boolean) => void;
   onApplyAutotune: () => void;
   onRevertAutotune: () => void;
+  onDetectKey: () => void;
 }) {
   return (
     <>
@@ -1282,16 +1308,50 @@ function FxPanel({
                 label="Amount" value={fx.autotune.amount} min={0} max={100} step={1} unit="%"
                 onChange={(v) => onFxChange((f) => ({ ...f, autotune: { ...f.autotune, amount: v } }))}
               />
+              {/* Key: two selects — root note + mode */}
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-gray-500 w-10 shrink-0">Key</span>
-                <select
-                  value={fx.autotune.key}
-                  onChange={(e) => onFxChange((f) => ({ ...f, autotune: { ...f.autotune, key: e.target.value } }))}
-                  className="flex-1 h-7 px-2 bg-[#111] border border-[#333] rounded-lg text-[11px] text-white focus:outline-none focus:border-violet-500/50 cursor-pointer"
-                >
-                  {Object.keys(AUTOTUNE_KEYS).map((k) => <option key={k} value={k}>{k === "Chromatic" ? "Chromatic (all notes)" : `${k} Major`}</option>)}
-                </select>
+                <div className="flex-1 flex gap-1.5">
+                  <select
+                    value={fx.autotune.key === "Chromatic" ? "Chromatic" : fx.autotune.key.split(" ")[0]}
+                    onChange={(e) => {
+                      const root = e.target.value;
+                      if (root === "Chromatic") {
+                        onFxChange((f) => ({ ...f, autotune: { ...f.autotune, key: "Chromatic" } }));
+                      } else {
+                        const mode = fx.autotune.key === "Chromatic" ? "Major" : (fx.autotune.key.split(" ")[1] ?? "Major");
+                        onFxChange((f) => ({ ...f, autotune: { ...f.autotune, key: `${root} ${mode}` } }));
+                      }
+                    }}
+                    className="flex-1 h-7 px-2 bg-[#111] border border-[#333] rounded-lg text-[11px] text-white focus:outline-none focus:border-violet-500/50 cursor-pointer"
+                  >
+                    <option value="Chromatic">Chromatic</option>
+                    {NOTE_ROOTS.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                  <select
+                    value={fx.autotune.key === "Chromatic" ? "Major" : (fx.autotune.key.split(" ")[1] ?? "Major")}
+                    disabled={fx.autotune.key === "Chromatic"}
+                    onChange={(e) => {
+                      const root = fx.autotune.key.split(" ")[0];
+                      onFxChange((f) => ({ ...f, autotune: { ...f.autotune, key: `${root} ${e.target.value}` } }));
+                    }}
+                    className="w-16 h-7 px-1 bg-[#111] border border-[#333] rounded-lg text-[11px] text-white focus:outline-none focus:border-violet-500/50 cursor-pointer disabled:opacity-40"
+                  >
+                    <option value="Major">Major</option>
+                    <option value="Minor">Minor</option>
+                  </select>
+                </div>
               </div>
+              {/* Detect Key from beat */}
+              <button
+                onClick={onDetectKey}
+                disabled={detectingKey || !hasBeat}
+                title={!hasBeat ? "Load a beat first" : "Analyse the beat audio to detect its key"}
+                className="w-full flex items-center justify-center gap-1.5 h-7 rounded-lg border border-violet-500/30 hover:border-violet-500/60 bg-violet-500/10 hover:bg-violet-500/20 text-violet-400 text-[10px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {detectingKey ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                {detectingKey ? "Detecting…" : "Detect Key from Beat"}
+              </button>
 
               {!lane.blobUrl ? (
                 <p className="text-[10px] text-gray-600 italic">Record a vocal first to apply autotune.</p>
