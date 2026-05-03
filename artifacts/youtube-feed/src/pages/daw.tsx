@@ -119,6 +119,7 @@ export default function DawPage() {
   const [time, setTime]               = useState(0);
   const [ytReady, setYtReady]         = useState(false);
   const [micError, setMicError]       = useState(false);
+  const [beatMuted, setBeatMuted]     = useState(false);
   const [zoom, setZoom]               = useState(50); // px per second
 
   const ytRef      = useRef<any>(null);
@@ -426,12 +427,28 @@ export default function DawPage() {
           </div>
 
           {/* Beat panel */}
-          <div className="shrink-0 flex items-center gap-3 px-3 bg-[#1a1a1a] border-b border-[#2a2a2a]" style={{ height: TRACK_H }}>
+          <div className="shrink-0 flex items-center gap-2 px-3 bg-[#1a1a1a] border-b border-[#2a2a2a]" style={{ height: TRACK_H }}>
             <img src={beat.thumbnailUrl} className="w-9 h-9 rounded-lg object-cover shrink-0 border border-[#333]" alt="" />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-[11px] font-bold text-gray-300 truncate">Beat</p>
               <p className="text-[10px] text-gray-600 truncate">{beat.channelName}</p>
             </div>
+            <button
+              onClick={() => {
+                const next = !beatMuted;
+                setBeatMuted(next);
+                try {
+                  if (next) ytRef.current?.mute?.();
+                  else ytRef.current?.unMute?.();
+                } catch (_) {}
+              }}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold transition-all shrink-0 border"
+              style={beatMuted
+                ? { backgroundColor: "rgba(234,179,8,0.15)", borderColor: "rgba(234,179,8,0.4)", color: "#eab308" }
+                : { borderColor: "#2a2a2a", color: "#555" }
+              }
+              title={beatMuted ? "Unmute beat" : "Mute beat"}
+            >M</button>
           </div>
 
           {/* Lane panels */}
