@@ -7,6 +7,7 @@
  */
 
 export * from "./addChannelRequest";
+export * from "./addYogaVideoBody";
 export * from "./channel";
 export * from "./channelSearchResult";
 export * from "./createDawProjectBody";
@@ -18,6 +19,7 @@ export * from "./getSimilarBeatsParams";
 export * from "./healthStatus";
 export * from "./listBeatsParams";
 export * from "./listVideosParams";
+export * from "./listYogaVideosParams";
 export * from "./recordingItem";
 export * from "./requestUploadUrlBody";
 export * from "./requestUploadUrlResponse";
@@ -28,6 +30,8 @@ export * from "./searchBeatChannelsParams";
 export * from "./searchBeatsOrder";
 export * from "./searchBeatsParams";
 export * from "./searchChannelsParams";
+export * from "./updateYogaCategoryBody";
 export * from "./video";
 export * from "./videoSummaryRequest";
 export * from "./videoSummaryResponse";
+export * from "./yogaVideo";

@@ -363,6 +363,79 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RequestUploadUrlResponse"
+  /yoga:
+    get:
+      operationId: listYogaVideos
+      tags: [yoga]
+      summary: List saved yoga videos
+      parameters:
+        - in: query
+          name: category
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of yoga videos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/YogaVideo"
+    post:
+      operationId: addYogaVideo
+      tags: [yoga]
+      summary: Add a yoga video by URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddYogaVideoBody"
+      responses:
+        "201":
+          description: Added yoga video
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/YogaVideo"
+  /yoga/{videoId}:
+    patch:
+      operationId: updateYogaVideoCategory
+      tags: [yoga]
+      summary: Update a yoga video's category
+      parameters:
+        - in: path
+          name: videoId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateYogaCategoryBody"
+      responses:
+        "200":
+          description: Updated yoga video
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/YogaVideo"
+    delete:
+      operationId: removeYogaVideo
+      tags: [yoga]
+      summary: Remove a yoga video
+      parameters:
+        - in: path
+          name: videoId
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
   /saved:
     get:
       operationId: listSavedVideos
@@ -794,6 +867,66 @@ components:
         - lanes
         - createdAt
         - updatedAt
+    YogaVideo:
+      type: object
+      properties:
+        id:
+          type: integer
+        videoId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        thumbnailUrl:
+          type: string
+        channelId:
+          type: string
+        channelName:
+          type: string
+        channelThumbnailUrl:
+          type: string
+          nullable: true
+        viewCount:
+          type: string
+          nullable: true
+        duration:
+          type: string
+          nullable: true
+        publishedAt:
+          type: string
+        category:
+          type: string
+          nullable: true
+        savedAt:
+          type: string
+      required:
+        - id
+        - videoId
+        - title
+        - description
+        - thumbnailUrl
+        - channelId
+        - channelName
+        - publishedAt
+        - savedAt
+    AddYogaVideoBody:
+      type: object
+      properties:
+        url:
+          type: string
+        category:
+          type: string
+          nullable: true
+      required:
+        - url
+    UpdateYogaCategoryBody:
+      type: object
+      properties:
+        category:
+          type: string
+          nullable: true
+      required: []
     SavedVideoItem:
       type: object
       properties:

@@ -233,6 +233,72 @@ export const RequestUploadUrlResponse = zod.object({
 });
 
 /**
+ * @summary List saved yoga videos
+ */
+export const ListYogaVideosQueryParams = zod.object({
+  category: zod.coerce.string().optional(),
+});
+
+export const ListYogaVideosResponseItem = zod.object({
+  id: zod.number(),
+  videoId: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  thumbnailUrl: zod.string(),
+  channelId: zod.string(),
+  channelName: zod.string(),
+  channelThumbnailUrl: zod.string().nullish(),
+  viewCount: zod.string().nullish(),
+  duration: zod.string().nullish(),
+  publishedAt: zod.string(),
+  category: zod.string().nullish(),
+  savedAt: zod.string(),
+});
+export const ListYogaVideosResponse = zod.array(ListYogaVideosResponseItem);
+
+/**
+ * @summary Add a yoga video by URL
+ */
+export const AddYogaVideoBody = zod.object({
+  url: zod.string(),
+  category: zod.string().nullish(),
+});
+
+/**
+ * @summary Update a yoga video's category
+ */
+export const UpdateYogaVideoCategoryParams = zod.object({
+  videoId: zod.coerce.string(),
+});
+
+export const UpdateYogaVideoCategoryBody = zod.object({
+  category: zod.string().nullish(),
+});
+
+export const UpdateYogaVideoCategoryResponse = zod.object({
+  id: zod.number(),
+  videoId: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  thumbnailUrl: zod.string(),
+  channelId: zod.string(),
+  channelName: zod.string(),
+  channelThumbnailUrl: zod.string().nullish(),
+  viewCount: zod.string().nullish(),
+  duration: zod.string().nullish(),
+  publishedAt: zod.string(),
+  category: zod.string().nullish(),
+  savedAt: zod.string(),
+});
+
+/**
+ * @summary Remove a yoga video
+ */
+export const RemoveYogaVideoParams = zod.object({
+  videoId: zod.coerce.string(),
+});
+
+/**
  * @summary List all saved videos
  */
 export const ListSavedVideosResponseItem = zod.object({

@@ -24,3 +24,4 @@ export * from "./saved-videos";
 export * from "./extracted-beats";
 export * from "./video-analyses";
 export * from "./daw-projects";
+export * from "./yoga-videos";

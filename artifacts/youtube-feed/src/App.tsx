@@ -7,6 +7,7 @@ import Recordings from "./pages/recordings";
 import Saved from "./pages/saved";
 import Extractor from "./pages/extractor";
 import Daw from "./pages/daw";
+import Yoga from "./pages/yoga";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/saved" component={Saved} />
       <Route path="/extractor" component={Extractor} />
       <Route path="/daw" component={Daw} />
+      <Route path="/yoga" component={Yoga} />
       <Route>
         <div className="min-h-screen bg-background flex flex-col items-center justify-center text-center p-4">
           <h1 className="text-6xl font-display font-bold text-text-main mb-4">404</h1>

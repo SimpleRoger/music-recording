@@ -18,6 +18,7 @@ import type {
 
 import type {
   AddChannelRequest,
+  AddYogaVideoBody,
   Channel,
   ChannelSearchResult,
   CreateDawProjectBody,
@@ -28,6 +29,7 @@ import type {
   HealthStatus,
   ListBeatsParams,
   ListVideosParams,
+  ListYogaVideosParams,
   RecordingItem,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
@@ -37,9 +39,11 @@ import type {
   SearchBeatChannelsParams,
   SearchBeatsParams,
   SearchChannelsParams,
+  UpdateYogaCategoryBody,
   Video,
   VideoSummaryRequest,
   VideoSummaryResponse,
+  YogaVideo,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1372,6 +1376,358 @@ export const useRequestUploadUrl = <
   TContext
 > => {
   return useMutation(getRequestUploadUrlMutationOptions(options));
+};
+
+/**
+ * @summary List saved yoga videos
+ */
+export const getListYogaVideosUrl = (params?: ListYogaVideosParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/yoga?${stringifiedParams}`
+    : `/api/yoga`;
+};
+
+export const listYogaVideos = async (
+  params?: ListYogaVideosParams,
+  options?: RequestInit,
+): Promise<YogaVideo[]> => {
+  return customFetch<YogaVideo[]>(getListYogaVideosUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListYogaVideosQueryKey = (params?: ListYogaVideosParams) => {
+  return [`/api/yoga`, ...(params ? [params] : [])] as const;
+};
+
+export const getListYogaVideosQueryOptions = <
+  TData = Awaited<ReturnType<typeof listYogaVideos>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListYogaVideosParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listYogaVideos>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListYogaVideosQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listYogaVideos>>> = ({
+    signal,
+  }) => listYogaVideos(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listYogaVideos>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListYogaVideosQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listYogaVideos>>
+>;
+export type ListYogaVideosQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List saved yoga videos
+ */
+
+export function useListYogaVideos<
+  TData = Awaited<ReturnType<typeof listYogaVideos>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListYogaVideosParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listYogaVideos>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListYogaVideosQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a yoga video by URL
+ */
+export const getAddYogaVideoUrl = () => {
+  return `/api/yoga`;
+};
+
+export const addYogaVideo = async (
+  addYogaVideoBody: AddYogaVideoBody,
+  options?: RequestInit,
+): Promise<YogaVideo> => {
+  return customFetch<YogaVideo>(getAddYogaVideoUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addYogaVideoBody),
+  });
+};
+
+export const getAddYogaVideoMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addYogaVideo>>,
+    TError,
+    { data: BodyType<AddYogaVideoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addYogaVideo>>,
+  TError,
+  { data: BodyType<AddYogaVideoBody> },
+  TContext
+> => {
+  const mutationKey = ["addYogaVideo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addYogaVideo>>,
+    { data: BodyType<AddYogaVideoBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return addYogaVideo(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddYogaVideoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addYogaVideo>>
+>;
+export type AddYogaVideoMutationBody = BodyType<AddYogaVideoBody>;
+export type AddYogaVideoMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a yoga video by URL
+ */
+export const useAddYogaVideo = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addYogaVideo>>,
+    TError,
+    { data: BodyType<AddYogaVideoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addYogaVideo>>,
+  TError,
+  { data: BodyType<AddYogaVideoBody> },
+  TContext
+> => {
+  return useMutation(getAddYogaVideoMutationOptions(options));
+};
+
+/**
+ * @summary Update a yoga video's category
+ */
+export const getUpdateYogaVideoCategoryUrl = (videoId: string) => {
+  return `/api/yoga/${videoId}`;
+};
+
+export const updateYogaVideoCategory = async (
+  videoId: string,
+  updateYogaCategoryBody: UpdateYogaCategoryBody,
+  options?: RequestInit,
+): Promise<YogaVideo> => {
+  return customFetch<YogaVideo>(getUpdateYogaVideoCategoryUrl(videoId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateYogaCategoryBody),
+  });
+};
+
+export const getUpdateYogaVideoCategoryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateYogaVideoCategory>>,
+    TError,
+    { videoId: string; data: BodyType<UpdateYogaCategoryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateYogaVideoCategory>>,
+  TError,
+  { videoId: string; data: BodyType<UpdateYogaCategoryBody> },
+  TContext
+> => {
+  const mutationKey = ["updateYogaVideoCategory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateYogaVideoCategory>>,
+    { videoId: string; data: BodyType<UpdateYogaCategoryBody> }
+  > = (props) => {
+    const { videoId, data } = props ?? {};
+
+    return updateYogaVideoCategory(videoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateYogaVideoCategoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateYogaVideoCategory>>
+>;
+export type UpdateYogaVideoCategoryMutationBody =
+  BodyType<UpdateYogaCategoryBody>;
+export type UpdateYogaVideoCategoryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a yoga video's category
+ */
+export const useUpdateYogaVideoCategory = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateYogaVideoCategory>>,
+    TError,
+    { videoId: string; data: BodyType<UpdateYogaCategoryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateYogaVideoCategory>>,
+  TError,
+  { videoId: string; data: BodyType<UpdateYogaCategoryBody> },
+  TContext
+> => {
+  return useMutation(getUpdateYogaVideoCategoryMutationOptions(options));
+};
+
+/**
+ * @summary Remove a yoga video
+ */
+export const getRemoveYogaVideoUrl = (videoId: string) => {
+  return `/api/yoga/${videoId}`;
+};
+
+export const removeYogaVideo = async (
+  videoId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getRemoveYogaVideoUrl(videoId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getRemoveYogaVideoMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeYogaVideo>>,
+    TError,
+    { videoId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeYogaVideo>>,
+  TError,
+  { videoId: string },
+  TContext
+> => {
+  const mutationKey = ["removeYogaVideo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeYogaVideo>>,
+    { videoId: string }
+  > = (props) => {
+    const { videoId } = props ?? {};
+
+    return removeYogaVideo(videoId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveYogaVideoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeYogaVideo>>
+>;
+
+export type RemoveYogaVideoMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove a yoga video
+ */
+export const useRemoveYogaVideo = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeYogaVideo>>,
+    TError,
+    { videoId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeYogaVideo>>,
+  TError,
+  { videoId: string },
+  TContext
+> => {
+  return useMutation(getRemoveYogaVideoMutationOptions(options));
 };
 
 /**

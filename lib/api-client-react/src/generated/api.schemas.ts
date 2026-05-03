@@ -113,6 +113,31 @@ export interface DawProjectItem {
   updatedAt: string;
 }
 
+export interface YogaVideo {
+  id: number;
+  videoId: string;
+  title: string;
+  description: string;
+  thumbnailUrl: string;
+  channelId: string;
+  channelName: string;
+  channelThumbnailUrl?: string | null;
+  viewCount?: string | null;
+  duration?: string | null;
+  publishedAt: string;
+  category?: string | null;
+  savedAt: string;
+}
+
+export interface AddYogaVideoBody {
+  url: string;
+  category?: string | null;
+}
+
+export interface UpdateYogaCategoryBody {
+  category?: string | null;
+}
+
 export interface SavedVideoItem {
   id: number;
   videoId: string;
@@ -190,4 +215,8 @@ export const SearchBeatsOrder = {
 
 export type GetSimilarBeatsParams = {
   title: string;
+};
+
+export type ListYogaVideosParams = {
+  category?: string;
 };
