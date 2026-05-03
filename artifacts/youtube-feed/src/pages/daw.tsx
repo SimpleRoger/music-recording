@@ -16,15 +16,21 @@ let _ytLoaded = false;
 let _ytReady  = false;
 const _ytCbs: (() => void)[] = [];
 function loadYT(cb: () => void) {
+  // Already available (e.g. loaded by the beat player before navigating here)
+  if ((window as any).YT?.Player) { cb(); return; }
   if (_ytReady) { cb(); return; }
   _ytCbs.push(cb);
   if (_ytLoaded) return;
   _ytLoaded = true;
+  const prev = (window as any).onYouTubeIframeAPIReady;
   (window as any).onYouTubeIframeAPIReady = () => {
     _ytReady = true;
+    if (typeof prev === "function") prev();
     _ytCbs.forEach((f) => f());
     _ytCbs.length = 0;
   };
+  // If the script tag already exists in the DOM (from another component), just wait
+  if (document.querySelector('script[src*="youtube.com/iframe_api"]')) return;
   const s = document.createElement("script");
   s.src = "https://www.youtube.com/iframe_api";
   document.head.appendChild(s);
