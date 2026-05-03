@@ -560,14 +560,15 @@ function RecordingCard({ rec }: { rec: RecordingItem }) {
 export default function Recordings() {
   const { data: recordings, isLoading } = useRecordings();
   const [dawBeat, setDawBeat] = useState<Video | null>(null);
+  const [pendingBeat, setPendingBeat] = useState<Video | null>(null);
 
-  // Auto-open BeatPlayer if we were sent here via "Open DAW"
+  // Pick up beat passed via "Open DAW" — show banner, don't auto-open modal
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem("tubefeed-daw-beat");
       if (raw) {
         sessionStorage.removeItem("tubefeed-daw-beat");
-        setDawBeat(JSON.parse(raw) as Video);
+        setPendingBeat(JSON.parse(raw) as Video);
       }
     } catch { /* ignore */ }
   }, []);
@@ -598,6 +599,37 @@ export default function Recordings() {
       </header>
 
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-8">
+
+        {/* ── Session banner — shown when arriving from "Open DAW" ── */}
+        {pendingBeat && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 flex items-center gap-4 p-4 rounded-xl bg-primary/10 border border-primary/30"
+          >
+            <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-border">
+              <img src={pendingBeat.thumbnailUrl} alt={pendingBeat.title} className="w-full h-full object-cover" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-primary font-semibold uppercase tracking-widest mb-0.5">Beat loaded</p>
+              <p className="text-text-main text-sm font-semibold truncate">{pendingBeat.title}</p>
+              <p className="text-text-muted text-xs truncate">{pendingBeat.channelName}</p>
+            </div>
+            <button
+              onClick={() => { setDawBeat(pendingBeat); setPendingBeat(null); }}
+              className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
+            >
+              <Mic className="w-4 h-4" />Start Recording
+            </button>
+            <button
+              onClick={() => setPendingBeat(null)}
+              className="shrink-0 p-1.5 rounded-lg text-text-muted hover:text-text-main transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold text-text-main flex items-center gap-2">
