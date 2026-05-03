@@ -6,7 +6,8 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRecordings, useDeleteRecording } from "../hooks/use-recordings";
-import type { RecordingItem } from "@workspace/api-client-react";
+import type { RecordingItem, Video } from "@workspace/api-client-react";
+import { BeatPlayer } from "../components/beat-player";
 
 function formatSeconds(s: number) {
   return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
@@ -558,6 +559,18 @@ function RecordingCard({ rec }: { rec: RecordingItem }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function Recordings() {
   const { data: recordings, isLoading } = useRecordings();
+  const [dawBeat, setDawBeat] = useState<Video | null>(null);
+
+  // Auto-open BeatPlayer if we were sent here via "Open DAW"
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("tubefeed-daw-beat");
+      if (raw) {
+        sessionStorage.removeItem("tubefeed-daw-beat");
+        setDawBeat(JSON.parse(raw) as Video);
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
@@ -629,6 +642,13 @@ export default function Recordings() {
           </div>
         )}
       </main>
+
+      {/* Auto-opened from "Open DAW" button in beats */}
+      <BeatPlayer
+        beat={dawBeat}
+        onClose={() => setDawBeat(null)}
+        onBeatSelect={setDawBeat}
+      />
     </div>
   );
 }

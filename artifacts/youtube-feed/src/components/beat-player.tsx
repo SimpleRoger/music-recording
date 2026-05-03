@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, ChevronDown, ChevronUp, ExternalLink, Music2,
   Sparkles, Loader2, FileText, Download, CheckCircle2,
-  Mic, Square, Trash2, Cloud, CloudOff, ChevronsUpDown, Scissors,
+  Mic, Square, Trash2, Cloud, CloudOff, ChevronsUpDown, Scissors, Wand2,
 } from "lucide-react";
 import type { Video } from "@workspace/api-client-react";
 import { formatDuration } from "../lib/utils";
@@ -28,8 +29,11 @@ function formatSeconds(s: number) {
   return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 }
 
+const DAW_BEAT_KEY = "tubefeed-daw-beat";
+
 export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   const isOpen = beat !== null;
+  const [, navigate] = useLocation();
   const [videoExpanded, setVideoExpanded] = useState(false);
   const [lyrics, setLyrics] = useState("");
   const [downloadState, setDownloadState] = useState<DownloadState>("idle");
@@ -440,6 +444,13 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     setTakeNumber((n) => n + 1);
   }, [resetRecording]);
 
+  const handleOpenDaw = useCallback(() => {
+    if (!beat) return;
+    try { sessionStorage.setItem(DAW_BEAT_KEY, JSON.stringify(beat)); } catch { /* ignore */ }
+    onClose();
+    navigate("/recordings");
+  }, [beat, onClose, navigate]);
+
   if (!beat) return null;
 
   const duration = formatDuration(beat.duration);
@@ -524,16 +535,24 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                             )}
                           </div>
                         ) : (
-                          <button
-                            onClick={() => setShowClipPicker((v) => !v)}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
-                              showClipPicker
-                                ? "bg-primary/10 text-primary border-primary/30"
-                                : "bg-surface hover:bg-surface-hover text-text-muted hover:text-text-main border-border hover:border-primary/30"
-                            }`}
-                          >
-                            <Download className="w-3.5 h-3.5" />Download MP3
-                          </button>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              onClick={handleOpenDaw}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border bg-primary/10 text-primary border-primary/30 hover:bg-primary/20"
+                            >
+                              <Wand2 className="w-3.5 h-3.5" />Open DAW
+                            </button>
+                            <button
+                              onClick={() => setShowClipPicker((v) => !v)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                                showClipPicker
+                                  ? "bg-primary/10 text-primary border-primary/30"
+                                  : "bg-surface hover:bg-surface-hover text-text-muted hover:text-text-main border-border hover:border-primary/30"
+                              }`}
+                            >
+                              <Download className="w-3.5 h-3.5" />Download MP3
+                            </button>
+                          </div>
                         )}
 
                         {/* Clip picker panel */}
