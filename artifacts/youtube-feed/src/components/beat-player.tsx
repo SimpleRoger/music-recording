@@ -448,7 +448,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     if (!beat) return;
     try { sessionStorage.setItem(DAW_BEAT_KEY, JSON.stringify(beat)); } catch { /* ignore */ }
     onClose();
-    navigate("/recordings");
+    navigate("/daw");
   }, [beat, onClose, navigate]);
 
   if (!beat) return null;
