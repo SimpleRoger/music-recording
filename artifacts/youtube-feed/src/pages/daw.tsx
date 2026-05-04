@@ -197,6 +197,8 @@ export default function DawPage() {
   const [beatWaveform, setBeatWaveform]   = useState<number[]>([]);
   const [beatDurationSec, setBeatDurationSec] = useState(0);
   const [beatWaveStatus, setBeatWaveStatus]   = useState<"idle"|"loading"|"ready"|"err">("idle");
+  const [micDevices, setMicDevices]       = useState<MediaDeviceInfo[]>([]);
+  const [selectedMicId, setSelectedMicId] = useState<string>("");
 
   const ytRef      = useRef<any>(null);
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -230,6 +232,23 @@ export default function DawPage() {
       if (raw) { sessionStorage.removeItem(BEAT_KEY); setBeat(JSON.parse(raw)); }
     } catch { /* ignore */ }
   }, []);
+
+  // ── Enumerate mic devices (need permission first, so try on mount + after recording starts) ──
+  async function refreshMicDevices() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter((d) => d.kind === "audioinput");
+      setMicDevices(inputs);
+      // Keep selectedMicId valid: if it's gone, reset to default
+      setSelectedMicId((prev) => {
+        if (!prev || !inputs.find((d) => d.deviceId === prev)) {
+          return inputs[0]?.deviceId ?? "";
+        }
+        return prev;
+      });
+    } catch { /* ignore */ }
+  }
+  useEffect(() => { refreshMicDevices(); }, []);
 
   // ── Fetch beat waveform whenever beat changes ──
   useEffect(() => {
@@ -813,10 +832,17 @@ export default function DawPage() {
 
   // ── Transport ─────────────────────────────────────────────────────────────────
   async function handleRecord() {
+    // If already recording, pressing ● again stops and keeps the take
+    if (isRecording) { stopAll(); return; }
     if (armedLane < 0 || !ytReady) return;
     stopAll(); setMicError(false);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioConstraints: MediaTrackConstraints = selectedMicId
+        ? { deviceId: { exact: selectedMicId } }
+        : true as unknown as MediaTrackConstraints;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+      // After first mic access, enumerate so labels are visible
+      refreshMicDevices();
       const mime   = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
       const mr     = new MediaRecorder(stream, { mimeType: mime });
       mrRef.current = mr; chunksRef.current = []; recLaneRef.current = armedLane;
@@ -962,14 +988,38 @@ export default function DawPage() {
           </button>
           <button
             onClick={handleRecord}
-            disabled={armedLane < 0 || !ytReady}
-            title={armedLane < 0 ? "Arm a lane first" : "Record"}
+            disabled={!isRecording && (armedLane < 0 || !ytReady)}
+            title={isRecording ? "Stop recording" : armedLane < 0 ? "Arm a lane first" : "Record"}
             className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${
-              isRecording ? "bg-red-600 shadow-lg shadow-red-900/50" : "bg-red-900/30 hover:bg-red-600/50"
+              isRecording ? "bg-red-600 shadow-lg shadow-red-900/50 animate-pulse" : "bg-red-900/30 hover:bg-red-600/50"
             }`}
           >
             <Circle className="w-4 h-4 text-red-400" fill={isRecording ? "currentColor" : "none"} />
           </button>
+
+          {/* Mic selector */}
+          <div className="flex items-center gap-1 pl-1 border-l border-[#2a2a2a]">
+            <Mic className="w-3 h-3 text-gray-600 shrink-0" />
+            {micDevices.length > 1 ? (
+              <select
+                value={selectedMicId}
+                onChange={(e) => setSelectedMicId(e.target.value)}
+                disabled={isRecording}
+                className="text-[10px] text-gray-400 bg-transparent border-none outline-none cursor-pointer max-w-[110px] truncate disabled:opacity-50"
+                title="Select microphone input"
+              >
+                {micDevices.map((d) => (
+                  <option key={d.deviceId} value={d.deviceId} className="bg-[#1a1a1a] text-gray-200">
+                    {d.label || `Mic ${micDevices.indexOf(d) + 1}`}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-[10px] text-gray-600 max-w-[110px] truncate" title={micDevices[0]?.label || "Default mic"}>
+                {micDevices[0]?.label ? micDevices[0].label.replace(/\s*\(.*?\)\s*/g, "").trim() || "Default" : "Default"}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Time display */}
@@ -1366,7 +1416,7 @@ export default function DawPage() {
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       {armedLane === lane.id ? (
                         <p className="text-xs font-semibold" style={{ color: lane.color }}>
-                          {isRecording ? "● Recording…" : "Armed — press ● Record"}
+                          {isRecording ? "● Recording — press ● to stop & keep take" : "Armed — press ● Record"}
                         </p>
                       ) : (
                         <p className="text-[11px] text-gray-800">Click ● on left to arm</p>
