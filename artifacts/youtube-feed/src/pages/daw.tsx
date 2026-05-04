@@ -492,6 +492,28 @@ export default function DawPage() {
     } catch { /* ignore */ }
   }
 
+  // ── Mono-to-stereo upmix ─────────────────────────────────────────────────────
+  async function upmixToStereo(blob: Blob, mime: string): Promise<{ blob: Blob; url: string }> {
+    const ac = new AudioContext();
+    const buf = await ac.decodeAudioData(await blob.arrayBuffer());
+    await ac.close();
+    if (buf.numberOfChannels >= 2) {
+      // Already stereo — return as-is
+      const url = URL.createObjectURL(blob);
+      return { blob, url };
+    }
+    // Mono → create stereo AudioBuffer by duplicating channel 0 to both L and R
+    const stereo = new AudioContext().createBuffer(2, buf.length, buf.sampleRate);
+    const mono = buf.getChannelData(0);
+    stereo.copyToChannel(mono, 0);
+    stereo.copyToChannel(mono, 1);
+    await stereo.context?.close?.();
+    const wav = audioBufferToWav(stereo);
+    const stereoBlob = new Blob([wav], { type: "audio/wav" });
+    const url = URL.createObjectURL(stereoBlob);
+    return { blob: stereoBlob, url };
+  }
+
   // ── WAV export ───────────────────────────────────────────────────────────────
   function writeWavString(view: DataView, offset: number, str: string) {
     for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
@@ -853,14 +875,15 @@ export default function DawPage() {
       mrRef.current = mr; chunksRef.current = []; recLaneRef.current = armedLane;
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mr.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: mime });
-        const url  = URL.createObjectURL(blob);
+        const rawBlob = new Blob(chunksRef.current, { type: mime });
         const lid  = recLaneRef.current;
+        stream.getTracks().forEach((t) => t.stop());
+        // Upmix to stereo if the Focusrite (or any mono device) gave us a mono stream
+        const { blob, url } = await upmixToStereo(rawBlob, mime);
         setLanes((p) => p.map((l) => l.id === lid
-          ? { ...l, blobUrl: url, mime, startOffset: 0, objectPath: null }
+          ? { ...l, blobUrl: url, mime: blob.type, startOffset: 0, objectPath: null }
           : l
         ));
-        stream.getTracks().forEach((t) => t.stop());
         decodeWaveform(blob, lid);
       };
       mr.start(100);
