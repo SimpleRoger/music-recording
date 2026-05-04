@@ -840,6 +840,7 @@ export default function DawPage() {
     try {
       const audioConstraints: MediaTrackConstraints = {
         ...(selectedMicId ? { deviceId: { exact: selectedMicId } } : {}),
+        channelCount: 2,   // force stereo so mono mic input plays in both ears
         echoCancellation: false,
         noiseSuppression: false,
         autoGainControl: false,
