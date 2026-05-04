@@ -837,9 +837,13 @@ export default function DawPage() {
     if (armedLane < 0 || !ytReady) return;
     stopAll(); setMicError(false);
     try {
-      const audioConstraints: MediaTrackConstraints = selectedMicId
-        ? { deviceId: { exact: selectedMicId } }
-        : true as unknown as MediaTrackConstraints;
+      // Enable echo cancellation when beat is audible to reduce bleed from speakers
+      const audioConstraints: MediaTrackConstraints = {
+        ...(selectedMicId ? { deviceId: { exact: selectedMicId } } : {}),
+        echoCancellation: !beatMuted,
+        noiseSuppression: false,
+        autoGainControl: false,
+      };
       const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
       // After first mic access, enumerate so labels are visible
       refreshMicDevices();
@@ -1100,6 +1104,11 @@ export default function DawPage() {
         <div className="shrink-0 flex items-center gap-2">
           {!ytReady && <span className="flex items-center gap-1 text-gray-500 text-xs"><Loader2 className="w-3 h-3 animate-spin" />Loading…</span>}
           {micError && <span className="text-red-400 text-xs">Mic denied</span>}
+          {isRecording && !beatMuted && (
+            <span className="flex items-center gap-1 text-amber-400 text-xs font-medium border border-amber-700/50 bg-amber-950/40 px-2 py-0.5 rounded-md" title="Beat is playing through speakers — mic may pick it up. Use headphones for clean recordings.">
+              🎧 Use headphones
+            </span>
+          )}
           {isRecording && <span className="flex items-center gap-1.5 text-red-400 font-bold text-xs animate-pulse"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />REC</span>}
 
           {/* Projects button */}
