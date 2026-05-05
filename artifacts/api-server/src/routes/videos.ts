@@ -68,10 +68,11 @@ router.get("/videos/search", async (req, res): Promise<void> => {
   const maxResults = Math.min(Number(req.query.maxResults ?? 20), 50);
   const apiKey = getApiKey();
 
-  // Search — no category restriction so any video type is returned
+  // Search — request extra results because we'll filter out Shorts (<= 60s)
+  const fetchCount = Math.min(maxResults * 2, 50);
   const searchUrl =
     `${YOUTUBE_API_BASE}/search?part=snippet&type=video&q=${encodeURIComponent(q)}` +
-    `&maxResults=${maxResults}&key=${apiKey}`;
+    `&maxResults=${fetchCount}&key=${apiKey}`;
   const searchResp = await fetch(searchUrl);
   if (!searchResp.ok) {
     res.status(502).json({ error: `YouTube API error: ${searchResp.status}` });
@@ -112,24 +113,36 @@ router.get("/videos/search", async (req, res): Promise<void> => {
     }
   }
 
-  const results = searchData.items.map((item) => {
-    const d = detailMap.get(item.id.videoId);
-    return {
-      videoId: item.id.videoId,
-      title: item.snippet.title,
-      description: item.snippet.description ?? "",
-      thumbnailUrl:
-        item.snippet.thumbnails?.medium?.url ??
-        item.snippet.thumbnails?.default?.url ??
-        `https://i.ytimg.com/vi/${item.id.videoId}/mqdefault.jpg`,
-      publishedAt: item.snippet.publishedAt ?? "",
-      channelId: item.snippet.channelId ?? "",
-      channelName: item.snippet.channelTitle ?? "",
-      channelThumbnailUrl: null,
-      duration: d?.duration ?? null,
-      viewCount: d?.viewCount ?? null,
-    };
-  });
+  // Parse ISO 8601 duration (PT1M30S → 90 seconds)
+  function parseDurationSec(iso: string | null | undefined): number {
+    if (!iso) return Infinity; // unknown duration → keep it
+    const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (!m) return Infinity;
+    return (Number(m[1] ?? 0) * 3600) + (Number(m[2] ?? 0) * 60) + Number(m[3] ?? 0);
+  }
+
+  const results = searchData.items
+    .map((item) => {
+      const d = detailMap.get(item.id.videoId);
+      return {
+        videoId: item.id.videoId,
+        title: item.snippet.title,
+        description: item.snippet.description ?? "",
+        thumbnailUrl:
+          item.snippet.thumbnails?.medium?.url ??
+          item.snippet.thumbnails?.default?.url ??
+          `https://i.ytimg.com/vi/${item.id.videoId}/mqdefault.jpg`,
+        publishedAt: item.snippet.publishedAt ?? "",
+        channelId: item.snippet.channelId ?? "",
+        channelName: item.snippet.channelTitle ?? "",
+        channelThumbnailUrl: null,
+        duration: d?.duration ?? null,
+        viewCount: d?.viewCount ?? null,
+      };
+    })
+    // Filter out Shorts (≤ 60 seconds)
+    .filter((v) => parseDurationSec(v.duration) > 60)
+    .slice(0, maxResults);
 
   res.json(results);
 });
