@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
 import {
   Plus, Youtube, AlertCircle, RefreshCw, Music2, FileText,
-  Mic, Clock, Flame, Bookmark, Wand2, Dumbbell, Sliders,
+  Mic, Clock, Flame, Bookmark, Wand2, Sliders,
   Search, X, Loader2,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -96,11 +96,6 @@ export default function Home() {
             <Link href="/saved">
               <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
                 <Bookmark className="w-3.5 h-3.5" />Saved
-              </span>
-            </Link>
-            <Link href="/yoga">
-              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
-                <Dumbbell className="w-3.5 h-3.5" />Yoga
               </span>
             </Link>
           </nav>
