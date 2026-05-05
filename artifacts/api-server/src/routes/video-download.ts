@@ -5,7 +5,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import { logger } from "../lib/logger";
-import { getYtdlpBin, YTDLP_CACHE_DIR, FFMPEG_DIR, ffmpegArgs, cookieArgs, serverArgs } from "../lib/ytdlp";
+import { getYtdlpBin, YTDLP_CACHE_DIR, FFMPEG_DIR, ffmpegArgs, cookieArgs } from "../lib/ytdlp";
 
 const router: IRouter = Router();
 
@@ -56,7 +56,92 @@ const FORMAT_1080 = [
   "best",
 ].join("/");
 
+// ── Proxy helpers ────────────────────────────────────────────────────────────
+const BOT_PHRASES = [
+  "sign in", "bot", "429", "403", "blocked", "unavailable",
+  "private video", "video unavailable", "confirm your age",
+  "http error 407", "proxy", "nsig", "sabr",
+];
+
+function isRetryable(text: string): boolean {
+  const lower = text.toLowerCase();
+  return BOT_PHRASES.some((p) => lower.includes(p));
+}
+
+function getProxyList(): Array<string | null> {
+  const raw = process.env.YTDLP_PROXY_LIST?.trim() ?? "";
+  const proxies: string[] = raw
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  // Shuffle for load distribution
+  for (let i = proxies.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [proxies[i], proxies[j]] = [proxies[j], proxies[i]];
+  }
+
+  // Deduplicate and cap at 3 proxy attempts, then always try direct last
+  const unique = [...new Set(proxies)].slice(0, 3);
+  return [...unique, null]; // null = no proxy (direct connection)
+}
+
 // ── Download worker ──────────────────────────────────────────────────────────
+async function spawnDownload(
+  ytdlpBin: string,
+  extraArgs: string[],
+  outTemplate: string,
+  url: string,
+  sectionArgs: string[],
+  onProgress: (pct: number, merging: boolean) => void,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(ytdlpBin, [
+      "--cache-dir", YTDLP_CACHE_DIR,
+      "--no-playlist",
+      "--extractor-args", "youtube:player_client=ios,mweb,tv",
+      "--impersonate", "chrome",
+      ...extraArgs,
+      ...ffmpegArgs(),
+      "--format", FORMAT_1080,
+      "--merge-output-format", "mp4",
+      "--output", outTemplate,
+      "--progress",
+      "--newline",
+      ...sectionArgs,
+      ...cookieArgs(),
+      url,
+    ]);
+
+    const lines: string[] = [];
+
+    const handleText = (text: string) => {
+      lines.push(text.trim());
+      const m = text.match(/\[download\]\s+([\d.]+)%/);
+      if (m) {
+        onProgress(Math.round(parseFloat(m[1])), false);
+      } else if (text.includes("[Merger]") || text.includes("[ffmpeg]")) {
+        onProgress(97, true);
+      }
+    };
+
+    child.stderr.on("data", (buf: Buffer) => handleText(buf.toString()));
+    child.stdout.on("data", (buf: Buffer) => handleText(buf.toString()));
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        const detail = lines.filter(Boolean).slice(-8).join(" | ");
+        const err = new Error(`yt-dlp exited ${code}: ${detail}`);
+        (err as any).retryable = isRetryable(detail);
+        reject(err);
+      }
+    });
+    child.on("error", reject);
+  });
+}
+
 async function runDownload(
   jobId: string,
   videoId: string,
@@ -65,97 +150,84 @@ async function runDownload(
   endTime?: string,
 ) {
   const job = jobs.get(jobId)!;
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tubefeed-vdl-"));
   const isClip = Boolean(startTime || endTime);
 
-  try {
-    const url = `https://www.youtube.com/watch?v=${videoId}`;
-    // Build section string: "*1:02-1:13", "*-1:13" (from start), "*1:02-inf" (to end)
-    const sectionArgs: string[] = [];
-    if (isClip) {
-      const start = startTime?.trim() || "0";
-      const end   = endTime?.trim()   || "inf";
-      sectionArgs.push("--download-sections", `*${start}-${end}`);
-      // Keep chapters aligned after cutting
-      sectionArgs.push("--force-keyframes-at-cuts");
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  const sectionArgs: string[] = [];
+  if (isClip) {
+    const start = startTime?.trim() || "0";
+    const end   = endTime?.trim()   || "inf";
+    sectionArgs.push("--download-sections", `*${start}-${end}`);
+    sectionArgs.push("--force-keyframes-at-cuts");
+  }
+
+  const proxyList = getProxyList();
+  let lastErr: Error | null = null;
+
+  for (let attempt = 0; attempt < proxyList.length; attempt++) {
+    const proxy = proxyList[attempt];
+    const isLastAttempt = attempt === proxyList.length - 1;
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tubefeed-vdl-"));
+
+    if (attempt > 0) {
+      job.message = proxy
+        ? `Retrying with different proxy… (${attempt + 1}/${proxyList.length})`
+        : "Retrying direct connection…";
+      job.pct = 0;
     }
 
+    const extraArgs = proxy ? ["--proxy", proxy] : [];
     const outTemplate = path.join(tmpDir, "%(title)s [%(height)sp].%(ext)s");
 
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn(getYtdlpBin(), [
-        "--cache-dir", YTDLP_CACHE_DIR,
-        "--no-playlist",
-        ...serverArgs(),
-        ...ffmpegArgs(),
-        "--format", FORMAT_1080,
-        "--merge-output-format", "mp4",
-        "--output", outTemplate,
-        "--progress",
-        "--newline",
-        ...sectionArgs,
-        ...cookieArgs(),
+    try {
+      await spawnDownload(
+        getYtdlpBin(),
+        extraArgs,
+        outTemplate,
         url,
-      ]);
+        sectionArgs,
+        (pct, merging) => {
+          if (merging) {
+            job.pct = 97;
+            job.message = "Merging audio + video…";
+          } else {
+            job.pct = Math.min(pct, 95);
+            job.message = `Downloading… ${pct}%`;
+          }
+        },
+      );
 
-      const stderrLines: string[] = [];
+      // Success — find the output file
+      const outFiles = fs.readdirSync(tmpDir).filter((f) => f.endsWith(".mp4"));
+      if (!outFiles.length) {
+        try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+        throw new Error("Download produced no output file");
+      }
 
-      child.stderr.on("data", (buf: Buffer) => {
-        const text = buf.toString();
-        stderrLines.push(text.trim());
-        // yt-dlp progress lines: "[download]  42.5% of ~100MiB..."
-        const m = text.match(/\[download\]\s+([\d.]+)%/);
-        if (m) {
-          const pct = Math.round(parseFloat(m[1]));
-          job.pct = Math.min(pct, 95);
-          job.message = `Downloading… ${pct}%`;
-        } else if (text.includes("[Merger]") || text.includes("[ffmpeg]")) {
-          job.pct = 97;
-          job.message = "Merging audio + video…";
-        }
-      });
+      const filePath = path.join(tmpDir, outFiles[0]);
+      const fileId = randomUUID();
+      files.set(fileId, filePath);
 
-      child.stdout.on("data", (buf: Buffer) => {
-        const text = buf.toString();
-        stderrLines.push(text.trim());
-        const m = text.match(/\[download\]\s+([\d.]+)%/);
-        if (m) {
-          const pct = Math.round(parseFloat(m[1]));
-          job.pct = Math.min(pct, 95);
-          job.message = `Downloading… ${pct}%`;
-        }
-      });
+      job.status = "done";
+      job.pct = 100;
+      job.message = "Ready to download";
+      job.fileId = fileId;
+      job.filename = outFiles[0];
+      return;
+    } catch (err: any) {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+      lastErr = err;
+      const retryable = err.retryable !== false; // default retryable unless explicitly false
+      logger.warn({ videoId, attempt, proxy: proxy ?? "direct", err: err.message }, "download attempt failed");
 
-      child.on("close", (code) => {
-        if (code === 0) resolve();
-        else {
-          const detail = stderrLines.filter(Boolean).slice(-5).join(" | ");
-          reject(new Error(`yt-dlp exited ${code}: ${detail}`));
-        }
-      });
-      child.on("error", reject);
-    });
-
-    // Find the output file
-    const files2 = fs.readdirSync(tmpDir).filter((f) => f.endsWith(".mp4"));
-    if (!files2.length) throw new Error("Download produced no output file");
-
-    const filePath = path.join(tmpDir, files2[0]);
-    const fileId = randomUUID();
-    files.set(fileId, filePath);
-
-    job.status = "done";
-    job.pct = 100;
-    job.message = "Ready to download";
-    job.fileId = fileId;
-    job.filename = files2[0];
-  } catch (err: any) {
-    // Clean up
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
-    logger.error({ videoId, err }, "video download failed");
-    job.status = "error";
-    job.error = err.message ?? "Download failed";
+      if (!retryable && !isLastAttempt) continue; // non-retryable — still try others
+      if (isLastAttempt) break;
+    }
   }
+
+  logger.error({ videoId, err: lastErr }, "video download failed after all attempts");
+  job.status = "error";
+  job.error = lastErr?.message ?? "Download failed";
 }
 
 // ── Routes ───────────────────────────────────────────────────────────────────
