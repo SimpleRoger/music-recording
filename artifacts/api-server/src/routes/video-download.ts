@@ -100,7 +100,7 @@ async function spawnDownload(
     const child = spawn(ytdlpBin, [
       "--cache-dir", YTDLP_CACHE_DIR,
       "--no-playlist",
-      "--extractor-args", "youtube:player_client=web_embedded",
+      "--extractor-args", "youtube:player_client=web_embedded,web",
       "--impersonate", "chrome",
       ...extraArgs,
       ...ffmpegArgs(),
