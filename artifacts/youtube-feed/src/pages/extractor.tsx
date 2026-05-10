@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Link } from "wouter";
 import {
-  Tv2, Music2, FileText, Mic, Bookmark, Wand2, Search, X,
+  FolderOpen, Music2, FileText, Mic, Bookmark, Wand2, Search, X,
   Download, Trash2, Loader2, Play, CheckCircle2, AlertCircle,
   Clock, Eye, Mic2,
 } from "lucide-react";
@@ -267,7 +267,7 @@ export default function Extractor() {
             </h1>
           </div>
           <nav className="flex items-center gap-1 bg-surface/60 border border-border rounded-xl px-1.5 py-1">
-            <Link href="/"><span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer"><Tv2 className="w-3.5 h-3.5" />Feed</span></Link>
+            <Link href="/"><span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer"><FolderOpen className="w-3.5 h-3.5" />Projects</span></Link>
             <Link href="/beats"><span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer"><Music2 className="w-3.5 h-3.5" />Beats</span></Link>
             <Link href="/lyrics"><span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer"><FileText className="w-3.5 h-3.5" />Lyrics</span></Link>
             <Link href="/recordings"><span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer"><Mic className="w-3.5 h-3.5" />Recordings</span></Link>

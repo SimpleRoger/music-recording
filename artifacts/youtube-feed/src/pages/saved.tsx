@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Bookmark, Tv2, Music2, FileText, Mic, Plus, Trash2, ExternalLink, Loader2, AlertCircle, Wand2 } from "lucide-react";
+import { Bookmark, FolderOpen, Music2, FileText, Mic, Plus, Trash2, ExternalLink, Loader2, AlertCircle, Wand2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -213,7 +213,7 @@ export default function Saved() {
           <nav className="flex items-center gap-1 bg-surface/60 border border-border rounded-xl px-1.5 py-1">
             <Link href="/">
               <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
-                <Tv2 className="w-3.5 h-3.5" />Feed
+                <FolderOpen className="w-3.5 h-3.5" />Projects
               </span>
             </Link>
             <Link href="/beats">

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "wouter";
-import { Plus, Music2, AlertCircle, RefreshCw, Tv2, FileText, Search, X, SlidersHorizontal, Loader2, Mic, Bookmark, Wand2 } from "lucide-react";
+import { Plus, Music2, AlertCircle, RefreshCw, FolderOpen, FileText, Search, X, SlidersHorizontal, Loader2, Mic, Bookmark, Wand2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBeats, useSearchBeats, type BeatSortOrder } from "../hooks/use-beats";
 import { useBeatChannels, useRemoveBeatChannel } from "../hooks/use-beat-channels";
@@ -65,7 +65,7 @@ export default function Beats() {
           <nav className="flex items-center gap-1 bg-surface/60 border border-border rounded-xl px-1.5 py-1">
             <Link href="/">
               <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer">
-                <Tv2 className="w-3.5 h-3.5" />Feed
+                <FolderOpen className="w-3.5 h-3.5" />Projects
               </span>
             </Link>
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-semibold bg-primary/15 text-primary border border-primary/20">

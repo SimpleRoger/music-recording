@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "wouter";
 import {
-  Tv2, Music2, FileText, ChevronDown, ChevronUp, ExternalLink,
+  FolderOpen, Music2, FileText, ChevronDown, ChevronUp, ExternalLink,
   Trash2, PenLine, Play, Mic, Mic2, Bookmark, Wand2, Search, X,
   Download, BookOpen, Loader2, AlertCircle, Sparkles,
 } from "lucide-react";
@@ -370,7 +370,7 @@ export default function Lyrics() {
             </h1>
           </div>
           <nav className="flex items-center gap-1 bg-surface/60 border border-border rounded-xl px-1.5 py-1">
-            <Link href="/"><span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer"><Tv2 className="w-3.5 h-3.5" />Feed</span></Link>
+            <Link href="/"><span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer"><FolderOpen className="w-3.5 h-3.5" />Projects</span></Link>
             <Link href="/beats"><span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer"><Music2 className="w-3.5 h-3.5" />Beats</span></Link>
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-semibold bg-primary/15 text-primary border border-primary/20"><FileText className="w-3.5 h-3.5" />Lyrics</span>
             <Link href="/recordings"><span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer"><Mic className="w-3.5 h-3.5" />Recordings</span></Link>

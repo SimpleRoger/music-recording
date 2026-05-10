@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import {
   Play, Square, Circle, Volume2, ArrowLeft,
   Loader2, Pause, SkipBack, Mic, ZoomIn, ZoomOut,
@@ -233,6 +233,20 @@ export default function DawPage() {
       if (raw) { sessionStorage.removeItem(BEAT_KEY); setBeat(JSON.parse(raw)); }
     } catch { /* ignore */ }
   }, []);
+
+  // ── Auto-load project from ?project=ID URL param ──
+  const search = useSearch();
+  useEffect(() => {
+    const pid = new URLSearchParams(search).get("project");
+    if (!pid) return;
+    fetch("/api/daw/projects")
+      .then((r) => r.json())
+      .then((all: SavedProject[]) => {
+        const proj = all.find((p) => String(p.id) === pid);
+        if (proj) handleLoadProject(proj);
+      })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Enumerate mic devices (need permission first, so try on mount + after recording starts) ──
   async function refreshMicDevices() {
@@ -990,9 +1004,9 @@ export default function DawPage() {
 
       {/* ── Transport bar ── */}
       <div className="h-14 bg-[#1c1c1c] border-b border-[#333] flex items-center px-4 gap-3 shrink-0">
-        <Link href="/beats">
+        <Link href="/">
           <span className="flex items-center gap-1 text-xs text-gray-500 hover:text-white transition-colors cursor-pointer">
-            <ArrowLeft className="w-3.5 h-3.5" />Beats
+            <ArrowLeft className="w-3.5 h-3.5" />Projects
           </span>
         </Link>
         <div className="w-px h-5 bg-[#333]" />
