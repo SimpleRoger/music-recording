@@ -388,7 +388,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
       setDownloadState("error");
       downloadTimerRef.current = setTimeout(() => { setDownloadState("idle"); setDownloadError(null); }, 5000);
     }
-  }, [beat, downloadState]);
+  }, [beat, downloadState, detectedBpm, detectedKey]);
 
   const startRecording = useCallback(async () => {
     if (recordState !== "idle") return;
