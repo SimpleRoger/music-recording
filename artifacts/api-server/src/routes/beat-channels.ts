@@ -12,6 +12,17 @@ import { getYtdlpBin, getFfmpegBin, YTDLP_CACHE_DIR, ffmpegArgs, cookieArgs, ser
 
 const router: IRouter = Router();
 
+function decodeHtml(str: string): string {
+  return str
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([\da-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
 router.get("/beat-channels/search", async (req, res): Promise<void> => {
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
   if (!q) { res.json([]); return; }
@@ -118,7 +129,7 @@ router.get("/beats/search", async (req, res): Promise<void> => {
 
   const results = items.map((item) => ({
     videoId: item.id.videoId,
-    title: item.snippet.title,
+    title: decodeHtml(item.snippet.title),
     description: item.snippet.description,
     thumbnailUrl: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? `https://img.youtube.com/vi/${item.id.videoId}/mqdefault.jpg`,
     publishedAt: item.snippet.publishedAt,
@@ -165,7 +176,7 @@ router.get("/beats/:videoId/similar", async (req, res): Promise<void> => {
 
   const similar = items.map((item) => ({
     videoId: item.id.videoId,
-    title: item.snippet.title,
+    title: decodeHtml(item.snippet.title),
     description: item.snippet.description,
     thumbnailUrl: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? `https://img.youtube.com/vi/${item.id.videoId}/mqdefault.jpg`,
     publishedAt: item.snippet.publishedAt,

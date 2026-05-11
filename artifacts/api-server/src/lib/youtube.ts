@@ -2,6 +2,17 @@ import { logger } from "./logger";
 
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 
+function decodeHtml(str: string): string {
+  return str
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([\da-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
 export function getApiKey(): string {
   const key = process.env.YOUTUBE_API_KEY;
   if (!key) {
@@ -69,7 +80,7 @@ export async function resolveChannelInfo(
   const item = data.items[0];
   return {
     id: item.id,
-    name: item.snippet.title,
+    name: decodeHtml(item.snippet.title),
     thumbnailUrl: item.snippet.thumbnails?.default?.url ?? null,
   };
 }
@@ -128,7 +139,7 @@ export async function searchChannels(query: string): Promise<YouTubeChannelSearc
 
   return searchData.items.map((item) => ({
     youtubeChannelId: item.id.channelId,
-    name: item.snippet.title,
+    name: decodeHtml(item.snippet.title),
     description: item.snippet.description,
     thumbnailUrl: item.snippet.thumbnails?.default?.url ?? null,
     subscriberCount: subsMap.get(item.id.channelId) ?? null,
@@ -172,13 +183,13 @@ export async function fetchVideoById(videoId: string): Promise<YouTubeVideo | nu
 
   return {
     videoId: item.id,
-    title: item.snippet.title,
+    title: decodeHtml(item.snippet.title),
     description: item.snippet.description,
     thumbnailUrl: thumbnail,
     publishedAt: new Date(item.snippet.publishedAt),
     viewCount: item.statistics?.viewCount ?? null,
     channelId: item.snippet.channelId,
-    channelName: item.snippet.channelTitle,
+    channelName: decodeHtml(item.snippet.channelTitle),
     channelThumbnailUrl: null,
     duration: item.contentDetails?.duration ?? null,
   };
@@ -252,7 +263,7 @@ export async function fetchPopularVideos(
 
     return {
       videoId,
-      title: item.snippet.title,
+      title: decodeHtml(item.snippet.title),
       description: item.snippet.description,
       thumbnailUrl: thumbnail,
       publishedAt: new Date(item.snippet.publishedAt),
@@ -337,7 +348,7 @@ export async function fetchRecentVideos(
 
     return {
       videoId,
-      title: item.snippet.title,
+      title: decodeHtml(item.snippet.title),
       description: item.snippet.description,
       thumbnailUrl: thumbnail,
       publishedAt: new Date(item.snippet.publishedAt),
@@ -405,9 +416,9 @@ export async function searchVideos(query: string, maxResults = 12): Promise<YouT
     const det = detailMap.get(item.id.videoId);
     return {
       videoId: item.id.videoId,
-      title: item.snippet.title,
+      title: decodeHtml(item.snippet.title),
       thumbnailUrl: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? "",
-      channelName: item.snippet.channelTitle,
+      channelName: decodeHtml(item.snippet.channelTitle),
       duration: det?.duration ?? null,
       viewCount: det?.viewCount ?? null,
     };
