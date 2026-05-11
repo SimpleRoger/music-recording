@@ -31,10 +31,43 @@ function formatSeconds(s: number) {
 
 const DAW_BEAT_KEY = "tubefeed-daw-beat";
 
+/** Build a filesystem-friendly filename from a beat title.
+ *  Format: key_bpmBPM_clean-title  e.g. cmajor_154bpm_acoustic_guitar_fakemink_jerk_type_beat
+ *  Falls back gracefully when key/BPM can't be parsed from the title. */
+function buildBeatFilename(title: string, clipStart?: string, clipEnd?: string): string {
+  const slug = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+
+  // Extract BPM — e.g. "154bpm", "154 bpm", "@154"
+  const bpmMatch = title.match(/(?:^|[\s[@(|])(\d{2,3})\s*bpm\b/i)
+    ?? title.match(/\b(\d{2,3})\s*bpm\b/i);
+  const bpm = bpmMatch ? bpmMatch[1] : null;
+
+  // Extract musical key — e.g. "C major", "F# minor", "Cm", "Bbmaj"
+  const keyMatch = title.match(
+    /\b([A-G][#b]?)\s*(major|maj|minor|min|m)\b/i
+  );
+  let key: string | null = null;
+  if (keyMatch) {
+    const root = keyMatch[1].replace("#", "sharp").replace("b", "flat");
+    const mode = keyMatch[2].toLowerCase();
+    key = slug(root) + (mode === "m" || mode.startsWith("min") ? "minor" : "major");
+  }
+
+  const parts: string[] = [];
+  if (key) parts.push(key);
+  if (bpm) parts.push(`${bpm}bpm`);
+  parts.push(slug(title));
+
+  let name = parts.join("_");
+  if (clipStart) name += `_${slug(clipStart)}-${slug(clipEnd ?? "end")}`;
+  return `${name}.m4a`;
+}
+
 export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   const isOpen = beat !== null;
   const [, navigate] = useLocation();
-  const [videoExpanded, setVideoExpanded] = useState(false);
+  const [videoExpanded, setVideoExpanded] = useState(true);
   const [lyrics, setLyrics] = useState("");
   const [downloadState, setDownloadState] = useState<DownloadState>("idle");
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -218,7 +251,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     if (beat) {
       const saved = localStorage.getItem(LYRICS_KEY(beat.videoId)) ?? "";
       setLyrics(saved);
-      setVideoExpanded(false);
+      setVideoExpanded(true);
       resetRecording();
       setTakeNumber(1);
       setDownloadState("idle");
@@ -298,9 +331,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
       const blobUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = blobUrl;
-      const isClip = Boolean(startTime || endTime);
-      const label = isClip ? ` (${startTime ?? "0:00"}-${endTime ?? "end"})` : "";
-      anchor.download = `${beat.title}${label}.m4a`;
+      anchor.download = buildBeatFilename(beat.title, startTime, endTime);
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);
