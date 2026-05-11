@@ -574,6 +574,12 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                               <Wand2 className="w-3.5 h-3.5" />Open DAW
                             </button>
                             <button
+                              onClick={() => handleDownload()}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border bg-surface hover:bg-surface-hover text-text-muted hover:text-text-main border-border hover:border-primary/30"
+                            >
+                              <Download className="w-3.5 h-3.5" />Full MP3
+                            </button>
+                            <button
                               onClick={() => setShowClipPicker((v) => !v)}
                               className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
                                 showClipPicker
@@ -581,7 +587,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                                   : "bg-surface hover:bg-surface-hover text-text-muted hover:text-text-main border-border hover:border-primary/30"
                               }`}
                             >
-                              <Download className="w-3.5 h-3.5" />Download MP3
+                              <Scissors className="w-3.5 h-3.5" />Section
                             </button>
                           </div>
                         )}
