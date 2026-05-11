@@ -97,6 +97,11 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   const [clipStart, setClipStart] = useState("");
   const [clipEnd, setClipEnd] = useState("");
 
+  // Background BPM + key detection — starts when a beat opens so results are
+  // ready by the time the user clicks download.
+  const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
+  const [detectedKey, setDetectedKey] = useState<{ note: string; mode: string } | null>(null);
+
   // Mic device selection
   const [micDevices, setMicDevices] = useState<{ deviceId: string; label: string }[]>([]);
   const [selectedMicId, setSelectedMicId] = useState<string>("");
@@ -296,6 +301,21 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     }));
   }, [beat?.videoId]);
 
+  // Background BPM + key detection — fires when a beat opens so results are
+  // cached before the user clicks download (no timeout; runs until done or beat changes).
+  useEffect(() => {
+    if (!beat) return;
+    setDetectedBpm(null);
+    setDetectedKey(null);
+    const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+    let cancelled = false;
+    fetchWithTimeout<{ bpm: number }>(`${base}/api/detect-bpm/${beat.videoId}`, 30000)
+      .then((r) => { if (!cancelled && r?.bpm) setDetectedBpm(r.bpm); });
+    fetchWithTimeout<{ note: string; mode: string }>(`${base}/api/detect-key/${beat.videoId}`, 60000)
+      .then((r) => { if (!cancelled && r?.note) setDetectedKey(r); });
+    return () => { cancelled = true; };
+  }, [beat?.videoId]);
+
   // Debounced lyrics save
   useEffect(() => {
     if (!beat) return;
@@ -341,12 +361,6 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     try {
       const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-      // Detect BPM + key in parallel (best-effort, 8 s timeout each)
-      const [bpmResult, keyResult] = await Promise.all([
-        fetchWithTimeout<{ bpm: number }>(`${base}/api/detect-bpm/${beat.videoId}`, 8000),
-        fetchWithTimeout<{ note: string; mode: string }>(`${base}/api/detect-key/${beat.videoId}`, 8000),
-      ]);
-
       const params = new URLSearchParams({ title: beat.title });
       if (startTime) params.set("startTime", startTime);
       if (endTime)   params.set("endTime",   endTime);
@@ -361,7 +375,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
       const blobUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = blobUrl;
-      anchor.download = buildBeatFilename(beat.title, startTime, endTime, bpmResult?.bpm, keyResult);
+      anchor.download = buildBeatFilename(beat.title, startTime, endTime, detectedBpm, detectedKey);
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);
