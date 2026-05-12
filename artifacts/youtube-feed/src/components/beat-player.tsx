@@ -101,6 +101,10 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   // ready by the time the user clicks download.
   const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
   const [detectedKey, setDetectedKey] = useState<{ note: string; mode: string } | null>(null);
+  // Refs mirror the state so the async handleDownload can always read the
+  // latest value even if detection resolves mid-download.
+  const detectedBpmRef = useRef<number | null>(null);
+  const detectedKeyRef = useRef<{ note: string; mode: string } | null>(null);
 
   // Mic device selection
   const [micDevices, setMicDevices] = useState<{ deviceId: string; label: string }[]>([]);
@@ -307,12 +311,24 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
     if (!beat) return;
     setDetectedBpm(null);
     setDetectedKey(null);
+    detectedBpmRef.current = null;
+    detectedKeyRef.current = null;
     const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     let cancelled = false;
     fetchWithTimeout<{ bpm: number }>(`${base}/api/detect-bpm/${beat.videoId}`, 30000)
-      .then((r) => { if (!cancelled && r?.bpm) setDetectedBpm(r.bpm); });
+      .then((r) => {
+        if (!cancelled && r?.bpm) {
+          detectedBpmRef.current = r.bpm;
+          setDetectedBpm(r.bpm);
+        }
+      });
     fetchWithTimeout<{ note: string; mode: string }>(`${base}/api/detect-key/${beat.videoId}`, 60000)
-      .then((r) => { if (!cancelled && r?.note) setDetectedKey(r); });
+      .then((r) => {
+        if (!cancelled && r?.note) {
+          detectedKeyRef.current = r;
+          setDetectedKey(r);
+        }
+      });
     return () => { cancelled = true; };
   }, [beat?.videoId]);
 
@@ -375,7 +391,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
       const blobUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = blobUrl;
-      anchor.download = buildBeatFilename(beat.title, startTime, endTime, detectedBpm, detectedKey);
+      anchor.download = buildBeatFilename(beat.title, startTime, endTime, detectedBpmRef.current, detectedKeyRef.current);
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);
@@ -388,7 +404,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
       setDownloadState("error");
       downloadTimerRef.current = setTimeout(() => { setDownloadState("idle"); setDownloadError(null); }, 5000);
     }
-  }, [beat, downloadState, detectedBpm, detectedKey]);
+  }, [beat, downloadState]);
 
   const startRecording = useCallback(async () => {
     if (recordState !== "idle") return;
