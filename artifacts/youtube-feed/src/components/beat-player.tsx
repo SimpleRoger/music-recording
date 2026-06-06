@@ -90,7 +90,7 @@ async function fetchWithTimeout<T>(url: string, ms: number): Promise<T | null> {
 export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   const isOpen = beat !== null;
   const [, navigate] = useLocation();
-  const [videoExpanded, setVideoExpanded] = useState(true);
+  const [videoExpanded, setVideoExpanded] = useState(() => window.matchMedia("(min-width: 640px)").matches);
   const [lyrics, setLyrics] = useState("");
   const [downloadState, setDownloadState] = useState<DownloadState>("idle");
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -925,7 +925,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
                   value={lyrics}
                   onChange={(e) => setLyrics(e.target.value)}
                   placeholder={"Write your lyrics here…\n\nYour words auto-save per beat."}
-                  className="flex-1 w-full bg-background border border-border rounded-xl p-4 text-text-main text-sm leading-relaxed resize-none focus:outline-none focus:border-primary/50 placeholder:text-text-muted/40 font-mono min-h-[200px]"
+                  className="flex-1 w-full bg-background border border-border rounded-xl p-4 text-text-main text-sm leading-relaxed resize-none focus:outline-none focus:border-primary/50 placeholder:text-text-muted/40 font-mono min-h-0"
                   spellCheck={false}
                 />
                 <a
@@ -940,8 +940,8 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
               </div>
             </div>
 
-            {/* Right — Similar Beats */}
-            <div className="w-full lg:w-80 shrink-0 border-t lg:border-t-0 lg:border-l border-border flex flex-col max-h-[40vh] lg:max-h-full overflow-hidden">
+            {/* Right — Similar Beats (desktop only) */}
+            <div className="hidden lg:flex lg:w-80 shrink-0 lg:border-l border-border flex-col lg:max-h-full overflow-hidden">
               <div className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
                 <div className="flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-primary" />
