@@ -20,6 +20,7 @@
 export * from "./channels";
 export * from "./beat-channels";
 export * from "./beat-saved-searches";
+export * from "./beat-listens";
 export * from "./recordings";
 export * from "./saved-videos";
 export * from "./extracted-beats";

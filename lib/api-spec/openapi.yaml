@@ -290,6 +290,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /beat-listens:
+    get:
+      operationId: listBeatListens
+      tags: [beats]
+      summary: Get all listened beat video IDs
+      responses:
+        "200":
+          description: Array of listened videoIds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+  /beat-listens/{videoId}:
+    post:
+      operationId: markBeatListened
+      tags: [beats]
+      summary: Mark a beat as listened
+      parameters:
+        - name: videoId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Marked as listened
   /beats:
     get:
       operationId: listBeats

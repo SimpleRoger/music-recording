@@ -156,6 +156,19 @@ export const RemoveBeatSavedSearchParams = zod.object({
 });
 
 /**
+ * @summary Get all listened beat video IDs
+ */
+export const ListBeatListensResponseItem = zod.string();
+export const ListBeatListensResponse = zod.array(ListBeatListensResponseItem);
+
+/**
+ * @summary Mark a beat as listened
+ */
+export const MarkBeatListenedParams = zod.object({
+  videoId: zod.coerce.string(),
+});
+
+/**
  * @summary List recent beats from beat channels
  */
 export const ListBeatsQueryParams = zod.object({

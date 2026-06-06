@@ -1154,6 +1154,165 @@ export const useRemoveBeatSavedSearch = <
 };
 
 /**
+ * @summary Get all listened beat video IDs
+ */
+export const getListBeatListensUrl = () => {
+  return `/api/beat-listens`;
+};
+
+export const listBeatListens = async (
+  options?: RequestInit,
+): Promise<string[]> => {
+  return customFetch<string[]>(getListBeatListensUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBeatListensQueryKey = () => {
+  return [`/api/beat-listens`] as const;
+};
+
+export const getListBeatListensQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBeatListens>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listBeatListens>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListBeatListensQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listBeatListens>>> = ({
+    signal,
+  }) => listBeatListens({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBeatListens>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBeatListensQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBeatListens>>
+>;
+export type ListBeatListensQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get all listened beat video IDs
+ */
+
+export function useListBeatListens<
+  TData = Awaited<ReturnType<typeof listBeatListens>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listBeatListens>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBeatListensQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Mark a beat as listened
+ */
+export const getMarkBeatListenedUrl = (videoId: string) => {
+  return `/api/beat-listens/${videoId}`;
+};
+
+export const markBeatListened = async (
+  videoId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getMarkBeatListenedUrl(videoId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getMarkBeatListenedMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markBeatListened>>,
+    TError,
+    { videoId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markBeatListened>>,
+  TError,
+  { videoId: string },
+  TContext
+> => {
+  const mutationKey = ["markBeatListened"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markBeatListened>>,
+    { videoId: string }
+  > = (props) => {
+    const { videoId } = props ?? {};
+
+    return markBeatListened(videoId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkBeatListenedMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markBeatListened>>
+>;
+
+export type MarkBeatListenedMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mark a beat as listened
+ */
+export const useMarkBeatListened = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markBeatListened>>,
+    TError,
+    { videoId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markBeatListened>>,
+  TError,
+  { videoId: string },
+  TContext
+> => {
+  return useMutation(getMarkBeatListenedMutationOptions(options));
+};
+
+/**
  * @summary List recent beats from beat channels
  */
 export const getListBeatsUrl = (params?: ListBeatsParams) => {

@@ -1,5 +1,6 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { initListenedQueryClient } from "./hooks/use-listened-beats";
 import Home from "./pages/home";
 import Beats from "./pages/beats";
 import Lyrics from "./pages/lyrics";
@@ -17,6 +18,8 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+initListenedQueryClient(queryClient);
 
 function Router() {
   return (
