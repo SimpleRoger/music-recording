@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { listRecordings, deleteRecording, requestUploadUrl, createRecording } from "@workspace/api-client-react";
+import { listRecordings, deleteRecording, createRecording } from "@workspace/api-client-react";
 import type { CreateRecordingBody } from "@workspace/api-client-react";
 
 export function useRecordings() {
@@ -29,22 +29,20 @@ export function useUploadRecording() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ blob, mime, meta, takeNumber = 1 }: UploadRecordingArgs) => {
-      // Step 1: get presigned upload URL
-      const { uploadURL, objectPath } = await requestUploadUrl({
-        name: `${meta.beatTitle}-take-${takeNumber}`,
-        size: blob.size,
-        contentType: mime,
-      });
+      const name = encodeURIComponent(`${meta.beatTitle}-take-${takeNumber}`);
 
-      // Step 2: upload blob directly to GCS
-      const putRes = await fetch(uploadURL, {
-        method: "PUT",
+      // Upload blob directly to the API server (no signed URL needed)
+      const uploadRes = await fetch(`/api/storage/uploads?name=${name}`, {
+        method: "POST",
         headers: { "Content-Type": mime },
         body: blob,
       });
-      if (!putRes.ok) throw new Error("Upload to cloud failed");
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || "Upload failed");
+      }
+      const { objectPath } = await uploadRes.json() as { objectPath: string };
 
-      // Step 3: save metadata record
       return createRecording({ ...meta, objectPath });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recordings"] }),

@@ -1,10 +1,11 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
+import { randomUUID } from "crypto";
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
-import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import { ObjectStorageService, ObjectNotFoundError, objectStorageClient, parseObjectPath } from "../lib/objectStorage";
 import { ObjectPermission } from "../lib/objectAcl";
 
 const router: IRouter = Router();
@@ -40,6 +41,45 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
   } catch (error) {
     req.log.error({ err: error }, "Error generating upload URL");
     res.status(500).json({ error: "Failed to generate upload URL" });
+  }
+});
+
+/**
+ * POST /storage/uploads
+ *
+ * Direct server-side upload — avoids signed URLs (which require sidecar).
+ * Client sends raw binary body; metadata comes from query params.
+ * Query: name (display name)
+ * Header: Content-Type (audio/webm, audio/mp4, etc.)
+ */
+router.post("/storage/uploads", async (req: Request, res: Response) => {
+  const contentType = (req.headers["content-type"] as string) || "application/octet-stream";
+  const name = (req.query.name as string) || "upload";
+
+  try {
+    const privateObjectDir = objectStorageService.getPrivateObjectDir();
+    const { bucketName, objectName: privateDir } = parseObjectPath(privateObjectDir);
+    const objectId = randomUUID();
+    // GCS object name: e.g. ".private/uploads/{uuid}"
+    const gcsObjectName = `${privateDir}/uploads/${objectId}`;
+    // objectPath for /storage/objects/ route: strip the privateDir prefix, keep just uploads/{uuid}
+    const entityId = `uploads/${objectId}`;
+    const objectPath = `/objects/${entityId}`;
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    const buffer = Buffer.concat(chunks);
+
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(gcsObjectName);
+    await file.save(buffer, { contentType, metadata: { name } });
+
+    res.status(201).json({ objectPath });
+  } catch (error) {
+    req.log.error({ err: error }, "Error uploading file");
+    res.status(500).json({ error: "Failed to upload file" });
   }
 });
 

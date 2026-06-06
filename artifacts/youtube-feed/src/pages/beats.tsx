@@ -100,7 +100,7 @@ export default function Beats() {
   const handleSaveSearch = () => {
     const q = (activeSavedSearch ?? searchInput).trim();
     if (!q) return;
-    addSavedSearch.mutate({ query: q }, {
+    addSavedSearch.mutate({ data: { query: q } }, {
       onSuccess: () => {
         setSavedFlash(true);
         setTimeout(() => setSavedFlash(false), 2000);
