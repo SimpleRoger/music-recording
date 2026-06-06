@@ -39,6 +39,7 @@ export default function Beats() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<BeatSortOrder>("relevance");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [savedFlash, setSavedFlash] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -99,7 +100,12 @@ export default function Beats() {
   const handleSaveSearch = () => {
     const q = (activeSavedSearch ?? searchInput).trim();
     if (!q) return;
-    addSavedSearch.mutate({ query: q });
+    addSavedSearch.mutate({ query: q }, {
+      onSuccess: () => {
+        setSavedFlash(true);
+        setTimeout(() => setSavedFlash(false), 2000);
+      },
+    });
   };
 
   const handleBeatSelect = useCallback((beat: Video) => setActiveBeat(beat), []);
@@ -311,15 +317,19 @@ export default function Beats() {
                   disabled={currentQueryIsSaved || addSavedSearch.isPending}
                   title={currentQueryIsSaved ? "Already saved" : "Save this search"}
                   className={`shrink-0 flex items-center gap-1.5 px-3 py-3 rounded-xl border text-sm font-medium transition-all ${
-                    currentQueryIsSaved
+                    savedFlash
+                      ? "bg-green-500/15 border-green-500/30 text-green-400 cursor-default"
+                      : currentQueryIsSaved
                       ? "bg-primary/10 border-primary/20 text-primary cursor-default"
                       : "bg-surface border-border text-text-muted hover:text-primary hover:border-primary/30 hover:bg-surface-hover"
                   }`}
                 >
-                  {currentQueryIsSaved
+                  {savedFlash
+                    ? <BookmarkCheck className="w-4 h-4" />
+                    : currentQueryIsSaved
                     ? <BookmarkCheck className="w-4 h-4" />
                     : <BookmarkPlus className="w-4 h-4" />}
-                  <span className="hidden sm:block">{currentQueryIsSaved ? "Saved" : "Save"}</span>
+                  <span className="text-xs">{savedFlash ? "Saved!" : currentQueryIsSaved ? "Saved" : "Save"}</span>
                 </button>
               )}
             </div>
@@ -402,6 +412,33 @@ export default function Beats() {
               )}
             </AnimatePresence>
           </div>
+
+          {/* Mobile-only saved searches chips — always visible below search bar on small screens */}
+          {savedSearches.length > 0 && (
+            <div className="flex sm:hidden items-center gap-2 -mt-1 overflow-x-auto pb-1 scrollbar-hide">
+              <Bookmark className="w-3.5 h-3.5 text-text-muted shrink-0" />
+              {savedSearches.map((s) => (
+                <div key={s.id} className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    onClick={() => handleSavedSearchClick(s.query)}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                      activeSavedSearch === s.query
+                        ? "bg-primary text-white border-primary"
+                        : "bg-surface border-border text-text-muted hover:text-text-main"
+                    }`}
+                  >
+                    {s.query}
+                  </button>
+                  <button
+                    onClick={() => removeSavedSearch.mutate({ id: s.id })}
+                    className="p-0.5 text-text-muted/40 hover:text-red-400 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Mobile add channel */}
           {!isSearchMode && (
