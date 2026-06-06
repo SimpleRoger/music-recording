@@ -130,6 +130,32 @@ export const RemoveBeatChannelParams = zod.object({
 });
 
 /**
+ * @summary List saved beat search queries
+ */
+export const ListBeatSavedSearchesResponseItem = zod.object({
+  id: zod.number(),
+  query: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const ListBeatSavedSearchesResponse = zod.array(
+  ListBeatSavedSearchesResponseItem,
+);
+
+/**
+ * @summary Save a beat search query
+ */
+export const AddBeatSavedSearchBody = zod.object({
+  query: zod.string(),
+});
+
+/**
+ * @summary Remove a saved search
+ */
+export const RemoveBeatSavedSearchParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary List recent beats from beat channels
  */
 export const ListBeatsQueryParams = zod.object({

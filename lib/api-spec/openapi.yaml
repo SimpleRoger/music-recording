@@ -229,6 +229,67 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /beat-saved-searches:
+    get:
+      operationId: listBeatSavedSearches
+      tags: [beats]
+      summary: List saved beat search queries
+      responses:
+        "200":
+          description: List of saved searches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BeatSavedSearch"
+    post:
+      operationId: addBeatSavedSearch
+      tags: [beats]
+      summary: Save a beat search query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+      responses:
+        "201":
+          description: Saved search added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BeatSavedSearch"
+        "409":
+          description: Query already saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /beat-saved-searches/{id}:
+    delete:
+      operationId: removeBeatSavedSearch
+      tags: [beats]
+      summary: Remove a saved search
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Saved search removed
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /beats:
     get:
       operationId: listBeats
@@ -681,6 +742,20 @@ components:
         - publishedAt
         - channelId
         - channelName
+    BeatSavedSearch:
+      type: object
+      properties:
+        id:
+          type: integer
+        query:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - query
+        - createdAt
     ChannelSearchResult:
       type: object
       properties:

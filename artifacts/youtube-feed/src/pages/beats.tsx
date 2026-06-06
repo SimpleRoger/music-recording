@@ -1,13 +1,25 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "wouter";
-import { Plus, Music2, AlertCircle, RefreshCw, FolderOpen, FileText, Search, X, SlidersHorizontal, Loader2, Mic, Bookmark, Wand2 } from "lucide-react";
+import {
+  Plus, Music2, AlertCircle, RefreshCw, FolderOpen, FileText,
+  Search, X, SlidersHorizontal, Loader2, Mic, Bookmark, Wand2,
+  BookmarkPlus, BookmarkCheck, Trash2, Clock, CheckCircle2,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBeats, useSearchBeats, type BeatSortOrder } from "../hooks/use-beats";
 import { useBeatChannels, useRemoveBeatChannel } from "../hooks/use-beat-channels";
 import { BeatCard } from "../components/beat-card";
 import { BeatPlayer } from "../components/beat-player";
 import { AddBeatChannelModal } from "../components/add-beat-channel-modal";
+import { useListenedBeats } from "../hooks/use-listened-beats";
 import type { Video } from "@workspace/api-client-react";
+import {
+  useListBeatSavedSearches,
+  useAddBeatSavedSearch,
+  useRemoveBeatSavedSearch,
+  getListBeatSavedSearchesQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 const SORT_OPTIONS: { value: BeatSortOrder; label: string }[] = [
   { value: "relevance", label: "Relevance" },
@@ -15,36 +27,95 @@ const SORT_OPTIONS: { value: BeatSortOrder; label: string }[] = [
   { value: "viewCount", label: "Popular" },
 ];
 
+type FilterMode = "all" | "new" | "heard";
+
 export default function Beats() {
+  const queryClient = useQueryClient();
   const [selectedChannelId, setSelectedChannelId] = useState<number | undefined>();
+  const [activeSavedSearch, setActiveSavedSearch] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [activeBeat, setActiveBeat] = useState<Video | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<BeatSortOrder>("relevance");
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const { isListened } = useListenedBeats();
+
   const { data: channels } = useBeatChannels();
-  const { data: beats, isLoading: beatsLoading, isError, refetch } = useBeats(selectedChannelId);
-  const { data: searchResults, isLoading: searchLoading } = useSearchBeats(searchQuery, sortOrder);
   const removeBeatChannel = useRemoveBeatChannel();
+  const { data: savedSearches = [] } = useListBeatSavedSearches();
 
-  const isSearchMode = searchQuery.trim().length >= 2;
+  const addSavedSearch = useAddBeatSavedSearch({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListBeatSavedSearchesQueryKey() }),
+    },
+  });
+  const removeSavedSearch = useRemoveBeatSavedSearch({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListBeatSavedSearchesQueryKey() }),
+    },
+  });
 
-  // Debounce search
+  const { data: beats, isLoading: beatsLoading, isError, refetch } = useBeats(selectedChannelId);
+
+  // The active search query: from saved search click or live typing
+  const activeQuery = activeSavedSearch ?? searchQuery;
+  const isSearchMode = activeQuery.trim().length >= 2;
+
+  const { data: searchResults, isLoading: searchLoading } = useSearchBeats(activeQuery, sortOrder);
+
+  // Debounce typed search
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setSearchQuery(searchInput), 400);
+    debounceRef.current = setTimeout(() => {
+      setSearchQuery(searchInput);
+      setActiveSavedSearch(null);
+    }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [searchInput]);
 
-  const clearSearch = () => { setSearchInput(""); setSearchQuery(""); searchRef.current?.focus(); };
+  const clearSearch = () => {
+    setSearchInput("");
+    setSearchQuery("");
+    setActiveSavedSearch(null);
+    searchRef.current?.focus();
+  };
+
+  const handleSavedSearchClick = (query: string) => {
+    setActiveSavedSearch(query);
+    setSearchInput(query);
+    setSearchQuery("");
+    setSelectedChannelId(undefined);
+    setFilterMode("all");
+  };
+
+  const currentQueryIsSaved = savedSearches.some(
+    (s) => s.query.toLowerCase() === (searchInput || activeSavedSearch || "").toLowerCase()
+  );
+
+  const handleSaveSearch = () => {
+    const q = (activeSavedSearch ?? searchInput).trim();
+    if (!q) return;
+    addSavedSearch.mutate({ query: q });
+  };
 
   const handleBeatSelect = useCallback((beat: Video) => setActiveBeat(beat), []);
 
-  const displayBeats = isSearchMode ? searchResults : beats;
+  const rawBeats = isSearchMode ? searchResults : beats;
   const isLoading = isSearchMode ? searchLoading : beatsLoading;
+
+  // Apply listened filter
+  const displayBeats = rawBeats?.filter((b) => {
+    if (filterMode === "new") return !isListened(b.videoId);
+    if (filterMode === "heard") return isListened(b.videoId);
+    return true;
+  });
+
+  const listenedCount = rawBeats?.filter((b) => isListened(b.videoId)).length ?? 0;
+  const newCount = rawBeats ? rawBeats.length - listenedCount : 0;
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
@@ -99,7 +170,9 @@ export default function Beats() {
       <div className="flex flex-1 min-h-0 overflow-hidden" style={{ height: 'calc(100vh - 4rem)' }}>
         {/* Sidebar */}
         <aside className="w-64 shrink-0 border-r border-border flex flex-col bg-surface overflow-y-auto hidden sm:flex">
-          <div className="px-4 pt-5 pb-3 flex items-center justify-between">
+
+          {/* Beat Channels section */}
+          <div className="px-4 pt-5 pb-2 flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-widest text-text-muted">Beat Channels</span>
             <span className="text-xs text-text-muted bg-background px-1.5 py-0.5 rounded-full border border-border">
               {channels?.length ?? 0}
@@ -107,7 +180,7 @@ export default function Beats() {
           </div>
 
           <button
-            onClick={() => { setSelectedChannelId(undefined); clearSearch(); }}
+            onClick={() => { setSelectedChannelId(undefined); clearSearch(); setFilterMode("all"); }}
             className={`mx-3 mb-1 flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
               !selectedChannelId && !isSearchMode ? "bg-primary/10 text-primary border border-primary/20" : "text-text-muted hover:text-text-main hover:bg-surface-hover"
             }`}
@@ -120,7 +193,7 @@ export default function Beats() {
             {channels?.map((ch) => (
               <div key={ch.id} className="group relative">
                 <button
-                  onClick={() => { setSelectedChannelId(ch.id === selectedChannelId ? undefined : ch.id); clearSearch(); }}
+                  onClick={() => { setSelectedChannelId(ch.id === selectedChannelId ? undefined : ch.id); clearSearch(); setFilterMode("all"); }}
                   className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-colors ${
                     selectedChannelId === ch.id && !isSearchMode ? "bg-primary/10 text-primary border border-primary/20" : "text-text-muted hover:text-text-main hover:bg-surface-hover"
                   }`}
@@ -147,40 +220,111 @@ export default function Beats() {
 
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="mx-3 mb-4 flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-text-muted hover:text-primary hover:bg-surface-hover border border-dashed border-border hover:border-primary/30 transition-all mt-auto"
+            className="mx-3 mb-4 flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-text-muted hover:text-primary hover:bg-surface-hover border border-dashed border-border hover:border-primary/30 transition-all"
           >
             <Plus className="w-4 h-4" />
             Add Beat Channel
           </button>
+
+          {/* Divider */}
+          <div className="mx-3 border-t border-border mb-2" />
+
+          {/* Saved Searches section */}
+          <div className="px-4 pb-2 flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-widest text-text-muted">Saved Searches</span>
+            <span className="text-xs text-text-muted bg-background px-1.5 py-0.5 rounded-full border border-border">
+              {savedSearches.length}
+            </span>
+          </div>
+
+          {savedSearches.length === 0 && (
+            <p className="px-4 pb-3 text-xs text-text-muted/60 leading-relaxed">
+              Search for a beat type above, then click the bookmark icon to save it here.
+            </p>
+          )}
+
+          <div className="flex flex-col gap-0.5 px-3 pb-4 flex-1">
+            {savedSearches.map((s) => (
+              <div key={s.id} className="group relative">
+                <button
+                  onClick={() => handleSavedSearchClick(s.query)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-colors ${
+                    activeSavedSearch === s.query
+                      ? "bg-primary/10 text-primary border border-primary/20"
+                      : "text-text-muted hover:text-text-main hover:bg-surface-hover"
+                  }`}
+                >
+                  <Search className="w-3.5 h-3.5 shrink-0 opacity-60" />
+                  <span className="truncate">{s.query}</span>
+                </button>
+                <button
+                  onClick={() => removeSavedSearch.mutate({ id: s.id })}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-400 transition-all p-1 rounded bg-surface-hover"
+                  title="Remove saved search"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
         </aside>
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto p-5 flex flex-col gap-4 min-h-0">
-          {/* Search bar + sort controls */}
+          {/* Search bar + save button */}
           <div className="flex flex-col gap-3">
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
-              <input
-                ref={searchRef}
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder='Search beats — try "fake mink" or "lofi hip hop"'
-                className="w-full pl-10 pr-10 py-3 bg-surface border border-border rounded-xl text-sm text-text-main placeholder:text-text-muted/50 focus:outline-none focus:border-primary/50 transition-colors"
-              />
-              {searchInput && (
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
+                <input
+                  ref={searchRef}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder='Search beats — try "steve lacy type beat"'
+                  className="w-full pl-10 pr-10 py-3 bg-surface border border-border rounded-xl text-sm text-text-main placeholder:text-text-muted/50 focus:outline-none focus:border-primary/50 transition-colors"
+                />
+                {searchInput && !isSearchMode && (
+                  <button
+                    onClick={clearSearch}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+                {isSearchMode && searchLoading && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted animate-spin" />
+                )}
+                {isSearchMode && !searchLoading && (
+                  <button
+                    onClick={clearSearch}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Save search button */}
+              {isSearchMode && (
                 <button
-                  onClick={clearSearch}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main transition-colors"
+                  onClick={handleSaveSearch}
+                  disabled={currentQueryIsSaved || addSavedSearch.isPending}
+                  title={currentQueryIsSaved ? "Already saved" : "Save this search"}
+                  className={`shrink-0 flex items-center gap-1.5 px-3 py-3 rounded-xl border text-sm font-medium transition-all ${
+                    currentQueryIsSaved
+                      ? "bg-primary/10 border-primary/20 text-primary cursor-default"
+                      : "bg-surface border-border text-text-muted hover:text-primary hover:border-primary/30 hover:bg-surface-hover"
+                  }`}
                 >
-                  <X className="w-4 h-4" />
+                  {currentQueryIsSaved
+                    ? <BookmarkCheck className="w-4 h-4" />
+                    : <BookmarkPlus className="w-4 h-4" />}
+                  <span className="hidden sm:block">{currentQueryIsSaved ? "Saved" : "Save"}</span>
                 </button>
-              )}
-              {isSearchMode && searchLoading && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted animate-spin" />
               )}
             </div>
 
-            {/* Sort tabs — only visible in search mode */}
+            {/* Sort + filter tabs — visible in search mode */}
             <AnimatePresence>
               {isSearchMode && (
                 <motion.div
@@ -190,28 +334,68 @@ export default function Beats() {
                   transition={{ duration: 0.18 }}
                   className="overflow-hidden"
                 >
-                  <div className="flex items-center gap-2">
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-text-muted shrink-0" />
-                    <span className="text-xs text-text-muted font-medium">Sort by:</span>
-                    <div className="flex items-center gap-1">
-                      {SORT_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setSortOrder(opt.value)}
-                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                            sortOrder === opt.value
-                              ? "bg-primary text-white shadow-sm"
-                              : "bg-surface border border-border text-text-muted hover:text-text-main hover:border-border-hover"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
+                  <div className="flex flex-col gap-2">
+                    {/* Sort row */}
+                    <div className="flex items-center gap-2">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                      <span className="text-xs text-text-muted font-medium">Sort:</span>
+                      <div className="flex items-center gap-1">
+                        {SORT_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => setSortOrder(opt.value)}
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                              sortOrder === opt.value
+                                ? "bg-primary text-white shadow-sm"
+                                : "bg-surface border border-border text-text-muted hover:text-text-main hover:border-border-hover"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    {searchResults && (
-                      <span className="ml-auto text-xs text-text-muted">
-                        {searchResults.length} result{searchResults.length !== 1 ? "s" : ""}
-                      </span>
+
+                    {/* Listened filter row */}
+                    {rawBeats && rawBeats.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                        <span className="text-xs text-text-muted font-medium">Show:</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setFilterMode("all")}
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                              filterMode === "all"
+                                ? "bg-primary text-white shadow-sm"
+                                : "bg-surface border border-border text-text-muted hover:text-text-main"
+                            }`}
+                          >
+                            All ({rawBeats.length})
+                          </button>
+                          <button
+                            onClick={() => setFilterMode("new")}
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                              filterMode === "new"
+                                ? "bg-primary text-white shadow-sm"
+                                : "bg-surface border border-border text-text-muted hover:text-text-main"
+                            }`}
+                          >
+                            <Clock className="w-3 h-3 inline mr-1" />
+                            New ({newCount})
+                          </button>
+                          <button
+                            onClick={() => setFilterMode("heard")}
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                              filterMode === "heard"
+                                ? "bg-primary text-white shadow-sm"
+                                : "bg-surface border border-border text-text-muted hover:text-text-main"
+                            }`}
+                          >
+                            <CheckCircle2 className="w-3 h-3 inline mr-1" />
+                            Heard ({listenedCount})
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </motion.div>
@@ -256,11 +440,30 @@ export default function Beats() {
           )}
 
           {/* Search empty state */}
-          {isSearchMode && !searchLoading && (!searchResults || searchResults.length === 0) && (
+          {isSearchMode && !searchLoading && (!displayBeats || displayBeats.length === 0) && (
             <div className="flex flex-col items-center justify-center flex-1 text-center py-16">
-              <Search className="w-10 h-10 text-text-muted/30 mb-4" />
-              <p className="text-text-main font-semibold mb-1">No results for "{searchQuery}"</p>
-              <p className="text-text-muted text-sm">Try a different search term or sort order</p>
+              {filterMode !== "all" ? (
+                <>
+                  <CheckCircle2 className="w-10 h-10 text-text-muted/30 mb-4" />
+                  <p className="text-text-main font-semibold mb-1">
+                    {filterMode === "new" ? "You've heard them all!" : "None heard yet"}
+                  </p>
+                  <p className="text-text-muted text-sm">
+                    {filterMode === "new"
+                      ? "Switch to \"All\" or \"Heard\" to browse."
+                      : "Play some beats and they'll show up here."}
+                  </p>
+                  <button onClick={() => setFilterMode("all")} className="mt-4 text-primary text-sm underline">
+                    Show all
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Search className="w-10 h-10 text-text-muted/30 mb-4" />
+                  <p className="text-text-main font-semibold mb-1">No results for "{activeQuery}"</p>
+                  <p className="text-text-muted text-sm">Try a different search term or sort order</p>
+                </>
+              )}
             </div>
           )}
 
@@ -289,7 +492,9 @@ export default function Beats() {
             <div className="flex flex-col gap-2">
               {isSearchMode && (
                 <p className="text-xs text-text-muted pb-1">
-                  Showing top results for <span className="text-text-main font-medium">"{searchQuery}"</span>
+                  {filterMode === "all" && <>Showing top results for <span className="text-text-main font-medium">"{activeQuery}"</span></>}
+                  {filterMode === "new" && <><Clock className="w-3 h-3 inline mr-1" />Unheard beats for <span className="text-text-main font-medium">"{activeQuery}"</span></>}
+                  {filterMode === "heard" && <><CheckCircle2 className="w-3 h-3 inline mr-1" />Beats you've heard for <span className="text-text-main font-medium">"{activeQuery}"</span></>}
                 </p>
               )}
               {displayBeats.map((beat, index) => (
@@ -302,6 +507,7 @@ export default function Beats() {
                   <BeatCard
                     beat={beat}
                     isPlaying={activeBeat?.videoId === beat.videoId}
+                    listened={isListened(beat.videoId)}
                     onClick={handleBeatSelect}
                   />
                 </motion.div>

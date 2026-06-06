@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./addBeatSavedSearchBody";
 export * from "./addChannelRequest";
 export * from "./addYogaVideoBody";
+export * from "./beatSavedSearch";
 export * from "./channel";
 export * from "./channelSearchResult";
 export * from "./createDawProjectBody";

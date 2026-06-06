@@ -35,6 +35,12 @@ export interface Video {
   duration?: string | null;
 }
 
+export interface BeatSavedSearch {
+  id: number;
+  query: string;
+  createdAt: string;
+}
+
 export interface ChannelSearchResult {
   youtubeChannelId: string;
   name: string;
@@ -186,6 +192,10 @@ export type ListVideosParams = {
 
 export type SearchBeatChannelsParams = {
   q: string;
+};
+
+export type AddBeatSavedSearchBody = {
+  query: string;
 };
 
 export type ListBeatsParams = {

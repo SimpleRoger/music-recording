@@ -17,8 +17,10 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AddBeatSavedSearchBody,
   AddChannelRequest,
   AddYogaVideoBody,
+  BeatSavedSearch,
   Channel,
   ChannelSearchResult,
   CreateDawProjectBody,
@@ -904,6 +906,251 @@ export const useRemoveBeatChannel = <
   TContext
 > => {
   return useMutation(getRemoveBeatChannelMutationOptions(options));
+};
+
+/**
+ * @summary List saved beat search queries
+ */
+export const getListBeatSavedSearchesUrl = () => {
+  return `/api/beat-saved-searches`;
+};
+
+export const listBeatSavedSearches = async (
+  options?: RequestInit,
+): Promise<BeatSavedSearch[]> => {
+  return customFetch<BeatSavedSearch[]>(getListBeatSavedSearchesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBeatSavedSearchesQueryKey = () => {
+  return [`/api/beat-saved-searches`] as const;
+};
+
+export const getListBeatSavedSearchesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBeatSavedSearches>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listBeatSavedSearches>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListBeatSavedSearchesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listBeatSavedSearches>>
+  > = ({ signal }) => listBeatSavedSearches({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBeatSavedSearches>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBeatSavedSearchesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBeatSavedSearches>>
+>;
+export type ListBeatSavedSearchesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List saved beat search queries
+ */
+
+export function useListBeatSavedSearches<
+  TData = Awaited<ReturnType<typeof listBeatSavedSearches>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listBeatSavedSearches>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBeatSavedSearchesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Save a beat search query
+ */
+export const getAddBeatSavedSearchUrl = () => {
+  return `/api/beat-saved-searches`;
+};
+
+export const addBeatSavedSearch = async (
+  addBeatSavedSearchBody: AddBeatSavedSearchBody,
+  options?: RequestInit,
+): Promise<BeatSavedSearch> => {
+  return customFetch<BeatSavedSearch>(getAddBeatSavedSearchUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addBeatSavedSearchBody),
+  });
+};
+
+export const getAddBeatSavedSearchMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addBeatSavedSearch>>,
+    TError,
+    { data: BodyType<AddBeatSavedSearchBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addBeatSavedSearch>>,
+  TError,
+  { data: BodyType<AddBeatSavedSearchBody> },
+  TContext
+> => {
+  const mutationKey = ["addBeatSavedSearch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addBeatSavedSearch>>,
+    { data: BodyType<AddBeatSavedSearchBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return addBeatSavedSearch(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddBeatSavedSearchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addBeatSavedSearch>>
+>;
+export type AddBeatSavedSearchMutationBody = BodyType<AddBeatSavedSearchBody>;
+export type AddBeatSavedSearchMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Save a beat search query
+ */
+export const useAddBeatSavedSearch = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addBeatSavedSearch>>,
+    TError,
+    { data: BodyType<AddBeatSavedSearchBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addBeatSavedSearch>>,
+  TError,
+  { data: BodyType<AddBeatSavedSearchBody> },
+  TContext
+> => {
+  return useMutation(getAddBeatSavedSearchMutationOptions(options));
+};
+
+/**
+ * @summary Remove a saved search
+ */
+export const getRemoveBeatSavedSearchUrl = (id: number) => {
+  return `/api/beat-saved-searches/${id}`;
+};
+
+export const removeBeatSavedSearch = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getRemoveBeatSavedSearchUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getRemoveBeatSavedSearchMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeBeatSavedSearch>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeBeatSavedSearch>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["removeBeatSavedSearch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeBeatSavedSearch>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return removeBeatSavedSearch(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveBeatSavedSearchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeBeatSavedSearch>>
+>;
+
+export type RemoveBeatSavedSearchMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Remove a saved search
+ */
+export const useRemoveBeatSavedSearch = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeBeatSavedSearch>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeBeatSavedSearch>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getRemoveBeatSavedSearchMutationOptions(options));
 };
 
 /**

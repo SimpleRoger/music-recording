@@ -1,14 +1,15 @@
-import { Play, Music2 } from "lucide-react";
+import { Play, Music2, CheckCircle2 } from "lucide-react";
 import type { Video } from "@workspace/api-client-react";
 import { formatDuration } from "../lib/utils";
 
 interface BeatCardProps {
   beat: Video;
   isPlaying: boolean;
+  listened?: boolean;
   onClick: (beat: Video) => void;
 }
 
-export function BeatCard({ beat, isPlaying, onClick }: BeatCardProps) {
+export function BeatCard({ beat, isPlaying, listened = false, onClick }: BeatCardProps) {
   const duration = formatDuration(beat.duration);
 
   return (
@@ -17,6 +18,8 @@ export function BeatCard({ beat, isPlaying, onClick }: BeatCardProps) {
       className={`group flex items-center gap-3 w-full p-3 rounded-xl border transition-all text-left ${
         isPlaying
           ? "bg-primary/10 border-primary/30"
+          : listened
+          ? "bg-surface border-border hover:border-border-hover hover:bg-surface-hover opacity-60"
           : "bg-surface border-border hover:border-border-hover hover:bg-surface-hover"
       }`}
     >
@@ -49,6 +52,14 @@ export function BeatCard({ beat, isPlaying, onClick }: BeatCardProps) {
         </p>
         <p className="text-xs text-text-muted mt-0.5 truncate">{beat.channelName}</p>
       </div>
+
+      {/* Listened badge */}
+      {listened && !isPlaying && (
+        <div className="shrink-0 flex items-center gap-1 text-text-muted/50">
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          <span className="text-[10px] font-medium hidden sm:block">Heard</span>
+        </div>
+      )}
     </button>
   );
 }

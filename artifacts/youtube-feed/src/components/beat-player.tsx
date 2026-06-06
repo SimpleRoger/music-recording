@@ -11,6 +11,7 @@ import { formatDuration } from "../lib/utils";
 import { useSimilarBeats } from "../hooks/use-beats";
 import { useUploadRecording } from "../hooks/use-recordings";
 import { BeatCard } from "./beat-card";
+import { markListened } from "../hooks/use-listened-beats";
 
 const LYRICS_KEY = (videoId: string) => `tubefeed-lyrics-${videoId}`;
 const BEAT_META_KEY = (videoId: string) => `tubefeed-beat-meta-${videoId}`;
@@ -294,7 +295,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beat?.videoId]);
 
-  // Save beat metadata
+  // Save beat metadata + mark as listened
   useEffect(() => {
     if (!beat) return;
     localStorage.setItem(BEAT_META_KEY(beat.videoId), JSON.stringify({
@@ -303,6 +304,7 @@ export function BeatPlayer({ beat, onClose, onBeatSelect }: BeatPlayerProps) {
       channelName: beat.channelName,
       thumbnailUrl: beat.thumbnailUrl,
     }));
+    markListened(beat.videoId);
   }, [beat?.videoId]);
 
   // Background BPM + key detection — fires when a beat opens so results are
