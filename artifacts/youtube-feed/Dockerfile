@@ -11,6 +11,9 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 ENV PORT=5173
 ENV BASE_PATH=/
 
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+
 RUN pnpm --filter @workspace/youtube-feed build
 
 EXPOSE 5173
