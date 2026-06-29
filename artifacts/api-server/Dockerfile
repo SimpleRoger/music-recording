@@ -8,6 +8,8 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
+ENV NODE_ENV=production
+
 RUN pnpm --filter @workspace/api-server build
 
 ENV PORT=3000
